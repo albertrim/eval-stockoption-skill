@@ -1,0 +1,166 @@
+{
+ "as_of": "2026-09-05",
+ "overall": {
+  "3y": {
+   "n": 237,
+   "approval_rate": 0.7173,
+   "listing_rate_given_approval": 0.8765,
+   "withdraw_rate": 0.2574,
+   "n_approved": 170,
+   "n_listed": 149
+  },
+  "5y": {
+   "n": 455,
+   "approval_rate": 0.7473,
+   "listing_rate_given_approval": 0.9382,
+   "withdraw_rate": 0.2308,
+   "n_approved": 340,
+   "n_listed": 319
+  },
+  "10y": {
+   "n": 892,
+   "approval_rate": 0.8206,
+   "listing_rate_given_approval": 0.9713,
+   "withdraw_rate": 0.1682,
+   "n_approved": 732,
+   "n_listed": 711
+  }
+ },
+ "by_sector": {
+  "it_saas": {
+   "n": 76,
+   "approval_rate": 0.7105,
+   "listing_rate_given_approval": 0.9074,
+   "withdraw_rate": 0.25,
+   "n_approved": 54,
+   "n_listed": 49
+  },
+  "bio_health": {
+   "n": 72,
+   "approval_rate": 0.7222,
+   "listing_rate_given_approval": 0.9808,
+   "withdraw_rate": 0.25,
+   "n_approved": 52,
+   "n_listed": 51
+  },
+  "content_game": {
+   "n": 12,
+   "approval_rate": 0.5833,
+   "listing_rate_given_approval": 0.8571,
+   "withdraw_rate": 0.4167,
+   "n_approved": 7,
+   "n_listed": 6
+  },
+  "hardware_semi": {
+   "n": 44,
+   "approval_rate": 0.6364,
+   "listing_rate_given_approval": 0.9643,
+   "withdraw_rate": 0.3409,
+   "n_approved": 28,
+   "n_listed": 27
+  },
+  "industrial": {
+   "n": 153,
+   "approval_rate": 0.8105,
+   "listing_rate_given_approval": 0.9355,
+   "withdraw_rate": 0.1699,
+   "n_approved": 124,
+   "n_listed": 116
+  },
+  "other": {
+   "n": 73,
+   "approval_rate": 0.7671,
+   "listing_rate_given_approval": 0.9286,
+   "withdraw_rate": 0.2329,
+   "n_approved": 56,
+   "n_listed": 52
+  }
+ },
+ "filed_to_listed_months": {
+  "n": 297,
+  "p25": 5.3,
+  "median": 6.3,
+  "p75": 7.7
+ },
+ "filed_to_approved_months": {
+  "n": 171,
+  "median": 3.5,
+  "p25": 2.6,
+  "p75": 4.6
+ },
+ "founded_to_filed_years": {
+  "overall": 11.6,
+  "by_sector": {
+   "it_saas": {
+    "median": 11.1,
+    "n": 47
+   },
+   "hardware_semi": {
+    "median": 10.7,
+    "n": 25
+   },
+   "industrial": {
+    "median": 15.2,
+    "n": 86
+   },
+   "other": {
+    "median": 12.7,
+    "n": 38
+   },
+   "bio_health": {
+    "median": 9.2,
+    "n": 52
+   },
+   "content_game": {
+    "median": 8.4,
+    "n": 6
+   },
+   "ai_data": {
+    "median": 13.4,
+    "n": 7
+   }
+  }
+ },
+ "track_share": {
+  "it_saas": {
+   "n": 50,
+   "tech_track_share": 0.58
+  },
+  "ai_data": {
+   "n": 2,
+   "tech_track_share": 1.0
+  },
+  "bio_health": {
+   "n": 82,
+   "tech_track_share": 0.756
+  },
+  "beauty": {
+   "n": 7,
+   "tech_track_share": 0.143
+  },
+  "ecommerce_platform": {
+   "n": 4,
+   "tech_track_share": 0.25
+  },
+  "fintech": {
+   "n": 6,
+   "tech_track_share": 0.0
+  },
+  "content_game": {
+   "n": 22,
+   "tech_track_share": 0.364
+  },
+  "hardware_semi": {
+   "n": 98,
+   "tech_track_share": 0.429
+  },
+  "industrial": {
+   "n": 66,
+   "tech_track_share": 0.227
+  },
+  "other": {
+   "n": 2,
+   "tech_track_share": 0.0
+  }
+ }
+}

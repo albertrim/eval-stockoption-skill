@@ -1,0 +1,264 @@
+---
+name: ipo-eval
+user-invocable: false
+description: 비상장 스타트업이 코스닥에 상장한다면 예상 시가총액·주당 가격이 얼마인지, 보유한 스톡옵션의 세후가치와 현재가치가 얼마인지 최근 5년 코스닥 상장 실데이터로 계산해 Threads에 바로 올릴 글로 만들어 준다. "우리 회사 상장하면", "내 스톡옵션 얼마", "코스닥 가면", "IPO 하면 내 지분", "스톡옵션 가치" 같은 말이 나오면 쓴다.
+---
+
+# ipo-eval — 우리 회사가 코스닥 가면 내 스톡옵션은 얼마일까
+
+**재미로 보는 계산기다. 투자·세무 자문이 아니다.** 숫자 자체는 최근 5년 코스닥 직접공모
+상장사 339곳과 1999년부터의 예비심사 청구 이력 2,100여 건에서 나온다.
+
+## 이 스킬의 규칙 (반드시 지킬 것)
+
+1. **숫자를 직접 계산하지 마라.** 모든 수치는 `scripts/ipo_eval.py`가 돌려주는 JSON 값을
+   그대로 쓴다. 곱하기·나누기·반올림을 새로 하지 않는다. JSON에 없는 값은 없다고 말한다.
+2. **비교기업 이름은 JSON의 `valuation.comps`에 있는 것만** 쓴다. 기억으로 회사 이름을
+   보태지 않는다.
+3. **매 출력에 "재미로 보는 추정, 투자 판단 근거 아님"** 한 줄을 넣는다.
+4. **"사라 / 팔아라 / 지금이 기회" 식 표현을 쓰지 않는다.** 관찰과 계산만 전한다.
+5. 사용자가 넣은 회사·옵션 정보는 `~/.ipo-eval/`에만 저장된다. 어디로도 보내지 않는다.
+6. 한국어로 답한다.
+
+## 실행
+
+```
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/ipo_eval.py" update check                  # 데이터 갱신 확인
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/ipo_eval.py" update apply --data --skill   # 갱신
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/ipo_eval.py" dart     --name <회사명>       # DART에서 실적·주식수 가져오기
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/ipo_eval.py" validate --profile <회사명>
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/ipo_eval.py" company  --profile <회사명>
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/ipo_eval.py" option   --profile <회사명> [--option N]
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/ipo_eval.py" format   --profile <회사명> [--option N]
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/ipo_eval.py" profiles
+```
+
+`${CLAUDE_PLUGIN_ROOT}`는 플러그인이 설치된 폴더다. 표준 라이브러리만 쓰므로 설치할 것은 없다.
+
+## 흐름
+
+### 0. 업데이트 확인 (세션에서 처음 부를 때 한 번)
+
+`update check`를 돌린다. `update_available`이 true면 이렇게 묻는다:
+
+> 비교 데이터가 `{data.local}` → `{data.remote}`로 새로 나왔습니다 (상장사 {companies}곳).
+> 업데이트할까요? (y/n)
+
+`y`면 **항상 `update apply --data --skill`**을 돌린다. 데이터와 코드 중 하나만 바뀌었어도
+그렇게 한다. 둘은 같이 움직이는 한 벌이고, 갈라놓으면 새 코드가 옛 데이터를 읽는다.
+`n`이면 그냥 진행한다.
+`offline: true`나 `skipped`가 오면 아무 말 없이 넘어간다. 이 단계로 사용자를 붙잡지 않는다.
+
+### 1. 모드 정하기
+
+- `/ipo-eval:company`, "우리 회사 상장하면" → 회사 모드
+- `/ipo-eval:option`, "내 스톡옵션 얼마" → 옵션 모드
+- 커맨드로 들어왔으면 모드가 이미 정해진 것이다. **다시 묻지 않는다.**
+- 말로 불렀는데 어느 쪽인지 모호하면 AskUserQuestion으로 "회사 / 옵션"을 고르게 한다
+- 옵션 모드인데 `profiles`가 비었거나 `result.company`가 없으면 회사 모드부터 한다
+
+### 2. 회사 모드 — 질문 여덟 번
+
+**한 턴에 하나씩 묻는다.** 선택지가 정해진 것만 AskUserQuestion을 쓰고, 나머지는 그냥 묻는다.
+"모름"이라고 답하면 넘어가고 결과에 "추정"으로 표시된다.
+
+**채팅으로 받은 숫자는 다음 질문으로 넘어가기 전에 한 줄로 되읽어 확인한다.** "매출 850억,
+전년 600억으로 넣겠습니다"처럼. 한 질문에 답이 둘 이상 오면 임의로 뒤엣것을 고르지 말고
+AskUserQuestion으로 어느 값인지 확정한다. 사용자가 넣지 않은 값이 프로필에 들어가면
+그 뒤 계산이 전부 어긋난다.
+
+| # | 묻는 것 | 방식 |
+|---|---|---|
+| 1 | 회사 이름 | 채팅. 같은 이름 프로필이 있으면 AskUserQuestion "그대로 사용 / 일부 수정 / 새로 입력" |
+| 1-a | **DART 조회** | 이름을 받자마자 `dart --name <회사명>`. 아래 규칙대로 |
+| 2 | **주요 비즈니스** | 채팅. 아래 문구를 그대로 쓴다 |
+| 3 | 설립연도 | 채팅 |
+| 4 | 최근 연매출과 그 전년 매출 | 채팅. "85억", "8,500,000,000" 다 받는다 |
+| 5 | 영업이익 (흑자/적자와 금액) | 채팅 |
+| 6 | 상장 단계 0~5 | AskUserQuestion. 3 이상이면 같은 턴에서 청구일을 이어 묻는다 |
+| 7 | 발행주식수 (모르면 최근 라운드 밸류·주당가) | 채팅 |
+
+**매출이 30억원에 못 미치면 7번이 특히 중요하다.** 그 경우 회사 실적으로 시총을 낼 수
+없어 최근 투자 밸류에이션이 유일한 규모 기준이 된다. 없으면 시총을 내지 않는다
+(바이오·헬스케어는 예외). 매출이 작다고 답했으면 최근 라운드를 한 번 더 확인한다.
+| 8 | 입력 확인 표 | AskUserQuestion "저장하고 계산 / 수정" |
+
+#### 1-a. DART 조회 — 이름을 받으면 바로 한다
+
+회사 이름을 받자마자 `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/ipo_eval.py" dart --name <회사명>`을 돌린다. 사용자에게
+묻지 않고 바로 한다. 감사보고서·사업보고서에서 읽어 온 값이 있으면 **그 값을 쓰고, 해당
+질문은 건너뛴다.**
+
+| 응답 | 할 일 |
+|---|---|
+| `ok: false`, `reason: no_key` / `offline` / `not_found` | 아무 말 없이 3번부터 순서대로 묻는다 |
+| `ok: true`, `report: null` | 설립연도만 쓰고 나머지는 묻는다 |
+| `ok: true`, 값 있음 | 그 값으로 채우고 **확인표에서 출처를 밝힌다** |
+
+채울 수 있는 것:
+
+| 프로필 항목 | DART 응답 | 대신하는 질문 |
+|---|---|---|
+| `founded_year` | `founded_year` (기업개황 설립일) | 3번 |
+| `revenue_krw` | `financials.revenue` | 4번 |
+| `revenue_prev_krw` | `financials.revenue_prev` | 4번 |
+| `operating_income_krw` | `financials.operating_income` | 5번 |
+| `shares_outstanding` | `shares.diluted` | 7번 |
+
+지켜야 할 것:
+
+- **`null`인 항목은 채우지 말고 원래 질문을 한다.** 못 읽은 값을 지어내지 않는다.
+- `dropped`에 든 항목은 계산기가 못 믿겠다고 버린 값이다. 그 항목은 반드시 물어본다.
+- `corp_name`이 사용자가 말한 이름과 다르면(사명 변경) 확인표에 둘 다 적는다.
+  `candidates[0].matched`가 `renamed`나 `contains`면 **다른 회사일 수 있으니 확인받는다.**
+- `financials.basis`가 `연결`인지 `별도`인지 확인표에 적는다. `null`이면 "기준 불명"이라고 적는다.
+- `shares.common`과 `shares.preferred`가 따로 오면 **우선주가 상장 전에 보통주로 전환된다는
+  점을 알리고** `diluted`를 쓴다. 보통주만 쓰면 주당 가격이 두 배로 부풀려진다.
+- `stock_options.outstanding`은 회사 전체 미행사 물량이다. 사용자 개인 보유량이 아니다.
+  옵션 모드에서 개인 수량을 물을 때 이 값을 답으로 쓰지 않는다.
+- 상장사(`listed: true`)면 이 스킬의 대상이 아니다. 그 사실을 알리고 계속할지 묻는다.
+- 매출·영업이익은 **감사받은 마지막 회계연도** 값이다. 사용자가 올해 추정치를 따로 주면
+  어느 해 숫자인지 확인표에 연도를 적는다.
+
+2번 질문 문구:
+
+> 주요 비즈니스를 자유롭게, 자세히 알려주세요. **무엇을 누구에게 팔아서 매출이 나는지**,
+> 매출 비중이 큰 순서로 적어주시면 됩니다. 과금 방식(월 구독·건당 수수료·제품 판매 등)까지
+> 있으면 더 좋습니다.
+
+답을 받으면 아래 표로 `sector_tag` 후보를 1~2개 고르고, **이유를 한 줄 붙여** AskUserQuestion으로
+확정한다(후보 + "기타"). 답변 원문은 `business_description`에 그대로 보관한다.
+
+| sector_tag | 뜻 |
+|---|---|
+| `it_saas` | 소프트웨어·SaaS·플랫폼 기술·AI 솔루션 |
+| `ai_data` | AI·데이터가 제품 그 자체인 경우 (표본이 적어 IT와 같은 군으로 묶여 비교된다) |
+| `bio_health` | 신약·진단·의료기기·헬스케어 |
+| `beauty` | 화장품·뷰티 |
+| `ecommerce_platform` | 이커머스·마켓플레이스·커머스 플랫폼 |
+| `fintech` | 결제·대출·자산관리 |
+| `content_game` | 게임·콘텐츠·미디어·교육 |
+| `hardware_semi` | 반도체·전자부품·장비 |
+| `industrial` | 제조·소재·산업재 |
+| `other` | 위에 없음 |
+
+상장 단계(6번) 선택지:
+
+| 값 | 설명 |
+|---|---|
+| 0 | 아직 준비 전 (주관사 미선정) |
+| 1 | 상장 주관사(증권사) 선정 |
+| 2 | 기술평가 통과 |
+| 3 | 거래소에 예비심사 **청구** |
+| 4 | 예비심사 **승인** |
+| 5 | 공모 진행 중 (증권신고서 제출) |
+
+3 이상이면 청구일(YYYY-MM)을 이어서 묻고 `stage_date`에 넣는다. 0~2는 실측 데이터가 없다.
+확률이 추정값이 되고, 결과에도 추정이라고 적힌다.
+
+### 3. 프로필 저장
+
+`~/.ipo-eval/profiles/<회사명>.json`에 아래 형태로 쓴다. **금액은 전부 원 단위 정수**로 바꾼다
+("85억" → `8500000000`).
+
+```json
+{
+  "name": "예시테크",
+  "business_description": "사용자가 쓴 원문 그대로",
+  "sector_tag": "it_saas",
+  "founded_year": 2019,
+  "revenue_krw": 8500000000,
+  "revenue_prev_krw": 6000000000,
+  "operating_income_krw": -3000000000,
+  "stage": 3,
+  "stage_date": "2026-07-15",
+  "shares_outstanding": null,
+  "last_round": {"post_money_krw": 40000000000, "price_per_share_krw": 8000},
+  "options": []
+}
+```
+
+쓴 다음 `validate --profile <이름>`을 돌린다. `errors`가 있으면 **그 항목만** 다시 묻는다.
+사용자에게 JSON을 보여주지 말고, 사람이 읽는 표로 확인받는다.
+
+### 4. 옵션 모드 — 질문 일곱 번
+
+| # | 묻는 것 | 방식 |
+|---|---|---|
+| 1 | 어느 회사 옵션인지 | AskUserQuestion (`profiles` 결과로 목록) |
+| 2 | 수량과 행사가 | 채팅 |
+| 3 | 부여일과 **행사 가능 일정** | 채팅. 아래 문구 |
+| 4 | 행사 기간 만료일 | 채팅 |
+| 5 | **벤처기업 인증** 여부 | AskUserQuestion: "벤처기업 인증 있음 / 없음 / 모름" |
+| 6 | 연봉 (건너뛰기 가능) | 채팅 |
+| 7 | 확인 표 | AskUserQuestion |
+
+5번은 세금이 크게 갈리는 자리다. 벤처기업이면 행사이익 연 2억원까지 비과세라, 같은 옵션도
+세후가 3배 넘게 차이 난다. "모름"이면 `is_venture: true`로 두되 **결과에 "벤처기업 인증이
+있다고 보고 계산했다"고 반드시 적는다.**
+
+3번 질문 문구 — **"클리프", "베스팅" 같은 말을 쓰지 않는다**:
+
+> 부여일과, 계약서에 "부여일로부터 2년 뒤 50%, 4년 뒤 100%"처럼 적힌 **행사 가능 일정**을
+> 알려주세요.
+
+받은 답을 `vest_schedule`로 바꾸고, **개월 수가 아니라 날짜로 되풀이해 확인**한다:
+
+> 2025년 3월 50%, 2026년 3월 75%, 2027년 3월 100% — 이렇게 맞나요?
+
+`options[]`에 넣을 형태:
+
+```json
+{"quantity": 5000, "strike_krw": 3000, "grant_date": "2023-03-15",
+ "vest_schedule": [{"after_months": 24, "cumulative_pct": 0.5},
+                   {"after_months": 48, "cumulative_pct": 1.0}],
+ "expiry_date": "2030-03-14", "salary_krw": null, "is_venture": true}
+```
+
+`is_venture`는 5번 답에 따라 정한다. 임의로 true를 넣지 않는다.
+
+한국은 보통 부여 후 2년은 행사할 수 없다. 그보다 빠른 일정이면 한 번 되묻는다.
+
+### 5. 계산과 출력
+
+```
+company --profile <이름>        → 상장 가능성·시총·주당가
+option  --profile <이름>        → 세후가치·현재가치 (company 결과 위에서 돈다)
+format  --profile <이름>        → Threads 메인 + 답글
+```
+
+`format` 결과의 `main`을 그대로 보여주고, `over_limit`이 0보다 크면 500자를 넘었다는 뜻이니
+사용자에게 알린다. 답글은 `replies` 순서대로 붙인다.
+
+메인 글 다음에 **터미널에서만 보는 짧은 해설**을 3~5줄 붙인다. 여기서도 숫자는 JSON 값을 그대로
+옮긴다. 넣을 것:
+
+- 비교기업을 어떻게 골랐는지 (`valuation.criteria`), 조건을 넓혔으면 그 사실
+- 백테스트 오차 (`backtest.mape_median`, `backtest.inside_rate`)
+- `option.warnings`에 있는 경고 (만료·행사 가능 비율·보호예수)
+- `estimated`에 값이 있으면 어떤 항목이 추정인지
+
+macOS면 `pbcopy`로 복사하겠냐고 한 줄 물어봐도 좋다.
+
+## 결과를 말할 때
+
+- **메인 글은 기준 시나리오 하나만 쓴다.** `format`이 이미 그렇게 만들어 준다. 세 개를 다시
+  늘어놓지 않는다. 범위는 답글의 `[범위]` 줄에 들어 있고, 그 줄을 지우지 않는다.
+- "보수~낙관"은 비교기업 배수의 하위 10% / 중간 / 상위 90%다. 최악·최선이 아니다.
+- `valuation.metric_note`가 있으면 **이익이 얇아 PER 대신 PSR로 계산했다는 뜻**이다. 그대로 전한다.
+  이 전환은 자동이다. 사용자에게 어느 방식으로 할지 묻지 않는다.
+- 상장 가능성은 **같은 단계에 있던 회사들이 실제로 상장한 비율**이다. 이 회사 하나의 확률로 말하면 틀린다.
+- 주당 가격은 **공모가 기준**이다. 상장 첫날 가격도, 6개월 뒤 가격도 아니다.
+- `option.scenarios.*.after_tax_6m_krw`가 있으면 "상장 6개월 뒤에 팔면" 숫자를 꼭 같이 말한다.
+  세금은 공모가 기준으로 이미 정해진다. 주가가 빠지면 그만큼 손해고, 사용자가 알아야 할 대목이다.
+- 값이 `null`이면 "계산하지 못했습니다"라고 말한다. 그럴듯한 숫자를 지어내지 않는다.
+- `valuation.basis_note`가 있으면 **회사 실적이 계산에 안 들어갔다는 뜻**이다. 반드시 전한다.
+- `valuation.scale_warning`이 있으면 시총을 내지 않은 것이다. 다른 데서 숫자를 끌어오지 않는다.
+- `company` 결과의 `options_recalc_needed`가 0보다 크면, 회사 숫자가 바뀌어 옵션 결과가
+  지워졌다는 뜻이다. `option`을 다시 돌린 뒤에 `format`한다.
+
+## 더 읽을 것
+
+- `${CLAUDE_PLUGIN_ROOT}/references/methodology.md` — 계산 방법, 가정, 한계. 사용자가 "어떻게 계산한 거냐"고 물으면 읽는다.
+- `${CLAUDE_PLUGIN_ROOT}/references/kosdaq_listing_rules.md` — 코스닥 상장요건 원문 수치와 출처.
+- `${CLAUDE_PLUGIN_ROOT}/data/tax_params.json` — 세율·한도와 각 값의 출처 URL.

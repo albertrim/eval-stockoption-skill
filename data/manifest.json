@@ -1,0 +1,79 @@
+{
+ "data_version": "2026-09-05",
+ "skill_version": "0.3.0",
+ "companies": 339,
+ "filings": 2107,
+ "in_review": 58,
+ "coverage": {
+  "ipo_price": "339/339 (100%)",
+  "revenue_krw": "332/339 (98%)",
+  "shares_at_ipo": "336/339 (99%)",
+  "ipo_market_cap_krw": "336/339 (99%)",
+  "new_share_ratio": "335/339 (99%)",
+  "ret_6m": "314/339 (93%)",
+  "applied_multiple": "92/339 (27%)",
+  "discount_low": "276/339 (81%)",
+  "options_outstanding": "194/339 (57%)",
+  "option_strike_krw": "2/339 (1%)",
+  "founded_date": "303/339 (89%)"
+ },
+ "files": {
+  "kosdaq_ipo.json": {
+   "sha256": "e5014600771fd9aa",
+   "bytes": 925846
+  },
+  "pipeline.json": {
+   "sha256": "37e61f28d1942f7f",
+   "bytes": 796140
+  },
+  "base_rates.json": {
+   "sha256": "a12fa8621cfa51dd",
+   "bytes": 2874
+  },
+  "tax_params.json": {
+   "sha256": "d03b2a956d857216",
+   "bytes": 22987
+  }
+ },
+ "backtest": {
+  "n": 336,
+  "mape_median": 0.499,
+  "mape_mean": 0.749,
+  "err_p25": 0.261,
+  "err_p75": 0.779,
+  "inside_low_high_rate": 0.696,
+  "low_q": 0.1,
+  "high_q": 0.9,
+  "fan_cap": 4.0,
+  "by_sector": {
+   "beauty": {
+    "n": 7,
+    "mape_median": 0.25
+   },
+   "bio_health": {
+    "n": 82,
+    "mape_median": 0.456
+   },
+   "content_game": {
+    "n": 22,
+    "mape_median": 0.588
+   },
+   "fintech": {
+    "n": 5,
+    "mape_median": 1.683
+   },
+   "hardware_semi": {
+    "n": 98,
+    "mape_median": 0.499
+   },
+   "industrial": {
+    "n": 64,
+    "mape_median": 0.509
+   },
+   "it_saas": {
+    "n": 50,
+    "mape_median": 0.513
+   }
+  }
+ }
+}

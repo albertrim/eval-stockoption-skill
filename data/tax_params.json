@@ -1,0 +1,304 @@
+{
+  "as_of": "2026-09-05",
+  "tax_year": 2026,
+  "currency": "KRW",
+  "_meta": {
+    "note": "2026년 귀속(2026년 중 행사·양도) 기준. 모든 수치는 2026-09-05에 웹 검색·원문 확인으로 검증함. 확인하지 못한 값은 null이며 note에 사유를 기재함.",
+    "verified_on": "2026-09-05",
+    "changed_in_2026": [
+      "증권거래세율: 코스닥 0.15% -> 0.20%, 코스피 0%(+농특세 0.15%) -> 0.05%(+농특세 0.15%). 2026-01-01 이후 양도분부터.",
+      "벤처기업법 시행령 개정(대통령령 제36480호, 2026-06-30 개정, 2026-07-01 시행): 시가 이하 행사가격 스톡옵션 부여 한도 1인당 20억원.",
+      "소득세 세율표(소득세법 제55조)는 2026년에도 변동 없음 - 2025-12-23 소득세법 개정(법률 제21221호)은 비과세소득·자녀세액공제 등만 손댔고 제55조 세율표는 그대로임.",
+      "상장주식 양도세 대주주 기준: 정부가 2025-07 세제개편안에서 50억원 -> 10억원 강화를 추진했다가 2025-09-15 철회. 2026년에도 50억원 유지."
+    ]
+  },
+  "venture_option_tax_free": {
+    "annual_limit_krw": 200000000,
+    "cumulative_limit_krw": 500000000,
+    "cumulative_limit_basis": "벤처기업별 총 누적 금액 (1인이 여러 벤처기업에서 부여받은 경우 기업별로 각각 5억원)",
+    "grant_deadline": "2027-12-31",
+    "sunset": "2027-12-31",
+    "sunset_basis": "행사일이 아니라 '부여일' 기준 - 2027-12-31 이전에 부여받은 주식매수선택권이어야 함",
+    "requirements": [
+      "벤처기업의 임원 또는 종업원일 것 (벤처기업이 발행주식 30% 이상을 인수한 기업의 임직원 포함)",
+      "「벤처기업육성에 관한 특별법」 제16조의3에 따라 부여받은 주식매수선택권일 것. 다만 코넥스 상장 벤처기업이 상법에 따라 적법하게 부여한 주식매수선택권도 인정",
+      "2027년 12월 31일 이전에 부여받았을 것",
+      "행사이익 = 주식매수선택권 행사 당시 시가 - 실제 매수가액 (신주인수권 포함)",
+      "'벤처기업 주식매수선택권 행사이익 비과세 특례적용명세서'를 행사 연도의 다음 해 2월 말일까지 제출할 것",
+      "적용 시기: 2023-01-01 이후 행사분부터 연간 2억원 한도 적용 (그 이전 행사분은 연 5천만원)"
+    ],
+    "as_of": "2026-09-05",
+    "law_last_amended": "2024-12-31",
+    "source_url": "https://www.nts.go.kr/nts/cm/cntnts/cntntsView.do?mi=6429&cntntsId=7865",
+    "source_name": "국세청 - 벤처기업 주식매수선택권 행사이익 (근로소득) / 조세특례제한법 제16조의2",
+    "corroborating_source_url": "https://www.law.go.kr/%EB%B2%95%EB%A0%B9/%EC%A1%B0%EC%84%B8%ED%8A%B9%EB%A1%80%EC%A0%9C%ED%95%9C%EB%B2%95/%EC%A0%9C16%EC%A1%B0%EC%9D%982",
+    "note": "국가법령정보센터(law.go.kr) 제16조의2 페이지는 JavaScript 렌더링이라 원문 직접 추출에 실패했으나, 국세청 안내 페이지와 law.go.kr 검색 인덱스, ZUZU 실무 가이드(2026-08-18 갱신)가 연 2억원 / 누적 5억원 / 2027-12-31 부여기한으로 모두 일치함."
+  },
+  "venture_option_payment_deferral": {
+    "_description": "조세특례제한법 제16조의3 - 벤처기업 주식매수선택권 행사이익 납부특례 (5년 분할납부)",
+    "installment_years": 5,
+    "mechanism": "① 행사 시 원천징수 안 함 ② 행사일이 속하는 과세기간 종합소득세 신고 시, 행사이익 관련 소득세의 5분의 4를 제외하고 5분의 1만 납부 ③ 나머지 5분의 4를 그 다음 4개 연도에 걸쳐 각각 4분의 1씩(= 총세액의 1/5씩) 분할납부",
+    "amount_limit_krw": null,
+    "exercise_deadline": "2027-12-31",
+    "sunset": "2027-12-31",
+    "requirements": [
+      "벤처기업 임원 등이 2027년 12월 31일 이전에 「벤처기업육성에 관한 특별법」 제16조의3에 따라 부여받은 주식매수선택권을 행사할 것",
+      "행사가격과 시가의 차액을 현금으로 교부받는 경우(현금결제형)는 적용 제외",
+      "벤처기업 임원 등이 원천징수의무자에게 납부특례 적용을 신청할 것 - 주식매수선택권을 행사한 날이 속하는 달의 다음 달 5일까지 특례적용신청서 제출",
+      "신청하면 원천징수의무자는 해당 행사이익에 대해 소득세를 원천징수하지 아니함",
+      "특례 신청절차 등 세부사항은 대통령령으로 정함(제3항)"
+    ],
+    "as_of": "2026-09-05",
+    "law_version": "법률 제21223호(2025-12-23 일부개정) 기준 현행 조문. 제16조의3 자체는 2024-12-31 개정이 최종",
+    "source_url": "https://www.law.go.kr/LSW//lsLawLinkInfo.do?lsJoLnkSeq=1001022345&lsId=001584&chrClsCd=010202&print=print",
+    "source_name": "국가법령정보센터 - 조세특례제한법 제16조의3(벤처기업 주식매수선택권 행사이익 납부특례)",
+    "note": "amount_limit_krw는 null - 조문 제1항~제3항에 금액 한도 규정이 없음. 조문상 한도가 존재하지 않는 것으로 보이나, '없음'을 명시한 문구를 직접 확인하지는 못해 null로 둠. 비과세(제16조의2)를 적용받고 남은 초과분에 대해 적용하는 것이 실무 관행."
+  },
+  "venture_option_tax_deferral": {
+    "_description": "조세특례제한법 제16조의4 - 벤처기업 주식매수선택권 행사이익에 대한 과세특례 (행사 시 근로소득 과세 대신 양도 시 양도소득 과세)",
+    "exercise_price_limit_krw": 500000000,
+    "exercise_price_limit_basis": "주식매수선택권 행사일부터 역산하여 2년이 되는 날이 속하는 과세기간부터 해당 행사일이 속하는 과세기간까지의 전체 행사가액 합계 (행사이익이 아니라 '행사가액' 기준)",
+    "min_holding_period_years": 1,
+    "dedicated_account_required": true,
+    "exercise_deadline": "2027-12-31",
+    "sunset": "2027-12-31",
+    "requirements": [
+      "「벤처기업육성에 관한 특별법」 제16조의3의 요건을 충족하는 '적격주식매수선택권'일 것",
+      "2027년 12월 31일 이전에 행사할 것",
+      "행사일부터 역산 2년이 되는 날이 속하는 과세기간부터 행사일이 속하는 과세기간까지 전체 행사가액 합계가 5억원 이하일 것",
+      "주식매수선택권 행사로 취득한 주식만을 거래하는 전용계좌를 개설할 것",
+      "취득 주식을 1년 이상 보유할 것",
+      "행사 시 근로소득으로 과세하지 않고, 양도 시 양도소득으로 과세",
+      "1년 내 처분, 5억원 초과 등 요건 위반 시 이연된 소득세가 추징됨"
+    ],
+    "as_of": "2026-09-05",
+    "source_url": "https://www.law.go.kr/LSW//lsLawLinkInfo.do?lsJoLnkSeq=1001022380&lsId=001584&chrClsCd=010202&print=print",
+    "source_name": "국가법령정보센터 - 조세특례제한법 제16조의4(벤처기업 주식매수선택권 행사이익에 대한 과세특례)",
+    "note": "국세청 안내 페이지에는 과세특례 일몰이 '2024-12-31'로 표기되어 있으나 이는 갱신되지 않은 서술로 판단됨. 국가법령정보센터 현행 조문은 '2027년 12월 31일 이전'으로 명시하고 있어 2027-12-31을 채택함."
+  },
+  "income_tax_brackets": [
+    {
+      "upto_krw": 14000000,
+      "rate": 0.06,
+      "deduction_krw": 0
+    },
+    {
+      "upto_krw": 50000000,
+      "rate": 0.15,
+      "deduction_krw": 1260000
+    },
+    {
+      "upto_krw": 88000000,
+      "rate": 0.24,
+      "deduction_krw": 5760000
+    },
+    {
+      "upto_krw": 150000000,
+      "rate": 0.35,
+      "deduction_krw": 15440000
+    },
+    {
+      "upto_krw": 300000000,
+      "rate": 0.38,
+      "deduction_krw": 19940000
+    },
+    {
+      "upto_krw": 500000000,
+      "rate": 0.4,
+      "deduction_krw": 25940000
+    },
+    {
+      "upto_krw": 1000000000,
+      "rate": 0.42,
+      "deduction_krw": 35940000
+    },
+    {
+      "upto_krw": null,
+      "rate": 0.45,
+      "deduction_krw": 65940000
+    }
+  ],
+  "income_tax_brackets_meta": {
+    "formula": "산출세액 = 과세표준 x 세율 - 누진공제액",
+    "bracket_count": 8,
+    "changed_for_2026": false,
+    "as_of": "2026-09-05",
+    "law_version": "소득세법 제55조 (법률 제21221호, 2025-12-23 일부개정, 시행 2026-07-01) - 세율표 자체는 2023-01-01 시행분부터 동일",
+    "source_url": "https://www.law.go.kr/LSW/lsLinkCommonInfo.do?lsJoLnkSeq=1019372661&chrClsCd=010202",
+    "source_name": "국가법령정보센터 - 소득세법 제55조(세율)",
+    "corroborating_source_url": "https://www.nts.go.kr/nts/cm/cntnts/cntntsView.do?mi=2227&cntntsId=7667",
+    "corroborating_source_name": "국세청 - 종합소득세 세율",
+    "note": "누진공제액은 소득세법 제55조의 누진식(예: '1,400만원 초과 5,000만원 이하: 84만원 + 1,400만원 초과금액의 15%')에서 역산한 값이며, 국세청 세율표의 누진공제액과 8개 구간 모두 일치함을 확인함."
+  },
+  "local_income_tax_rate": 0.1,
+  "local_income_tax": {
+    "rate_of_income_tax": 0.1,
+    "standard_rates_by_bracket": [
+      0.006,
+      0.015,
+      0.024,
+      0.035,
+      0.038,
+      0.04,
+      0.042,
+      0.045
+    ],
+    "as_of": "2026-09-05",
+    "source_url": "https://casenote.kr/%EB%B2%95%EB%A0%B9/%EC%A7%80%EB%B0%A9%EC%84%B8%EB%B2%95/%EC%A0%9C92%EC%A1%B0",
+    "source_name": "지방세법 제92조(개인지방소득세 표준세율) - 소득세법 제55조 세율의 1/10 (1천분의 6 ~ 1천분의 45)",
+    "corroborating_source_url": "https://www.seocho.go.kr/site/tax/02/10201130000002023050901.jsp",
+    "corroborating_source_name": "서초구청 - 지방소득세 안내 ('소득세 및 법인세 세율의 10%에 상당하는 누진세율')",
+    "note": "지방세법 제92조는 소득세와 동일한 과세표준 구간에 1/10 세율을 매기는 독립 세율표 구조이며, 결과적으로 산출세액 기준 소득세의 10%임. 지방자치단체장은 조례로 표준세율의 100분의 50 범위에서 가감할 수 있음(제92조 제2항)."
+  },
+  "securities_transaction_tax": {
+    "kosdaq_rate": 0.002,
+    "kosdaq_rate_percent": "0.20%",
+    "kosdaq_includes_special_rural_tax": false,
+    "kospi_rate": 0.0005,
+    "kospi_special_rural_tax_rate": 0.0015,
+    "kospi_total_rate": 0.002,
+    "konex_rate": 0.001,
+    "otc_k_otc_rate": 0.002,
+    "effective_from": "2026-01-01",
+    "applies_to": "2026-01-01 이후 양도분",
+    "previous_kosdaq_rate": 0.0015,
+    "as_of": "2026-09-05",
+    "source_url": "https://easylaw.go.kr/CSP/CnpClsMain.laf?popMenu=ov&csmSeq=1701&ccfNo=2&cciNo=3&cnpClsNo=1",
+    "source_name": "법제처 찾기쉬운 생활법령정보 - 양도소득세·증권거래세 및 배당소득세 (2026-08-15 기준: 유가증권시장 0.05%, 코넥스 0.1%, 코스닥/장외거래 0.2%)",
+    "corroborating_source_url": "https://biz.heraldcorp.com/article/10627001",
+    "corroborating_source_name": "헤럴드경제(2025-12-01) - 증권거래세법 시행령 개정, 2026-01-01 시행. 코스닥 0.15%->0.20%, 코스피 거래세 0%->0.05%(농특세 0.15% 유지)",
+    "note": "농어촌특별세는 유가증권시장(코스피)에만 0.15% 부과되고 코스닥에는 부과되지 않음. 따라서 코스닥 장내매도 시 총 부담은 0.20%로 끝남. 2026년부터 인상된 것이 핵심 변경사항."
+  },
+  "listed_stock_capital_gains": {
+    "small_shareholder_on_market_exempt": true,
+    "small_shareholder_note": "대주주가 아닌 자가 코스피·코스닥·코넥스 '장내(증권시장)'에서 양도하는 상장주식은 양도소득세 과세 대상이 아님. 장외 양도나 비상장주식 양도는 소액주주도 과세 대상.",
+    "major_shareholder_criteria": {
+      "kosdaq": {
+        "ownership_ratio": 0.02,
+        "market_value_krw": 5000000000
+      },
+      "kospi": {
+        "ownership_ratio": 0.01,
+        "market_value_krw": 5000000000
+      },
+      "konex": {
+        "ownership_ratio": 0.04,
+        "market_value_krw": 5000000000
+      },
+      "logic": "지분율 기준 또는 시가총액(종목당 보유액) 기준 중 하나만 충족해도 대주주",
+      "judgment_date": "직전 사업연도 종료일(대체로 직전연도 12월 31일) 현재 기준. 2025-12-31 기준으로 판정하여 2026년 양도 시 적용",
+      "changed_for_2026": false,
+      "change_note": "정부가 2025-07 세제개편안에서 50억원 -> 10억원 강화를 발표했으나 2025-09-15 당정협의에서 철회하고 50억원 유지 확정"
+    },
+    "major_shareholder_tax_rates": [
+      {
+        "condition": "대주주, 과세표준 3억원 이하",
+        "rate": 0.2,
+        "note": "지방소득세 포함 시 22%"
+      },
+      {
+        "condition": "대주주, 과세표준 3억원 초과",
+        "rate": 0.25,
+        "formula": "6천만원 + (3억원 초과액 x 25%)",
+        "note": "지방소득세 포함 시 27.5%"
+      },
+      {
+        "condition": "대주주가 중소기업 외 주식을 1년 미만 보유 후 양도",
+        "rate": 0.3,
+        "note": "지방소득세 포함 시 33%"
+      }
+    ],
+    "non_major_shareholder_tax_rates": [
+      {
+        "condition": "대주주 아닌 자, 중소기업 주식 (장외 양도 등 과세대상인 경우)",
+        "rate": 0.1
+      },
+      {
+        "condition": "대주주 아닌 자, 그 밖의 주식 (장외 양도 등 과세대상인 경우)",
+        "rate": 0.2
+      }
+    ],
+    "annual_basic_deduction_krw": 2500000,
+    "local_income_tax_on_capital_gains_rate": 0.1,
+    "as_of": "2026-09-05",
+    "source_url": "https://easylaw.go.kr/CSP/CnpClsMain.laf?popMenu=ov&csmSeq=1701&ccfNo=2&cciNo=3&cnpClsNo=1",
+    "source_name": "법제처 찾기쉬운 생활법령정보 - 양도소득세·증권거래세 및 배당소득세 (2026-08-15 기준) / 소득세법 시행령 제157조",
+    "corroborating_source_url": "https://www.newsis.com/view/NISX20250915_0003328454",
+    "corroborating_source_name": "뉴시스(2025-09-15) - 구윤철 부총리 '주식 양도세 대주주 기준 50억원으로 유지'",
+    "note": "코스닥 지분율 2% 기준은 소득세법 시행령 제157조(주권상장법인의 대주주의 범위 등)에 근거하며, LBOX 법령(시행 2025-02-28) 및 복수의 실무 자료로 확인함. 법제처 easylaw 페이지는 상장법인 지분율을 코스피 기준 1%로만 요약 표기하고 있어 시장별 지분율은 시행령 제157조를 기준으로 기재함. annual_basic_deduction_krw(양도소득 기본공제 250만원)은 상시 적용되는 일반 규정으로, 이번 조사에서 별도 1차 출처 확인은 하지 않음."
+  },
+  "option_exercise_min_tenure": {
+    "min_years": 2,
+    "start_point": "주식매수선택권 부여를 결의한 주주총회(또는 이사회) 결의일",
+    "requirement": "결의일부터 2년 이상 재임 또는 재직하여야 행사 가능",
+    "exceptions": [
+      "부여받은 자가 사망한 경우 - 그 상속인이 행사 가능 (상법 제340조의4 제2항)",
+      "벤처기업의 경우: 사망, 정년, 그 밖에 본인에게 책임 없는 사유로 퇴임·퇴직한 경우 - 잔여 행사기간 동안 행사 가능 (벤처기업육성에 관한 특별법 제16조의3)"
+    ],
+    "unlisted_company_note": "비상장회사에 상법 제340조의4 제1항을 적용할 때, 2년 요건은 강행규정이어서 정관이나 주주총회 특별결의로 완화할 수 없음 (대법원 2011.3.24. 선고 2010다85027 판결)",
+    "as_of": "2026-09-05",
+    "source_url": "https://casenote.kr/%EB%B2%95%EB%A0%B9/%EC%83%81%EB%B2%95/%EC%A0%9C340%EC%A1%B0%EC%9D%984",
+    "source_name": "상법 제340조의4(주식매수선택권의 행사)",
+    "corroborating_source_url": "https://www.gov.kr/portal/service/serviceInfo/142000000025",
+    "corroborating_source_name": "정부24(중소벤처기업부) - 벤처기업 주식매수선택권 제도 / 벤처기업육성에 관한 특별법 제16조의3",
+    "corroborating_source_url_2": "https://kind.krx.co.kr/external/dst/notice/11800/2026%20%EC%BD%94%EC%8A%A4%EB%8B%A5%20%EC%83%81%EC%9E%A5%EC%8B%AC%EC%82%AC%20%EC%9D%B4%ED%95%B4%EC%99%80%20%EC%8B%A4%EB%AC%B4.pdf",
+    "corroborating_source_name_2": "한국거래소 「2026 코스닥 상장심사 이해와 실무」 - '주식매수선택권은 관련 주주총회결의일부터 2년 이상 재임 또는 재직한 이후' 행사되어야 함",
+    "note": "정년 퇴직이 예외에 포함되는지는 출처 간 서술이 엇갈림. 정부24(중소벤처기업부)는 '사망 이외에 정년이나 자신에게 책임 없는 사유로 퇴직한 경우에도 행사 가능'으로 안내하나, 일부 검색 결과는 벤처기업법 시행령상 정년 퇴직이 '본인의 책임이 아닌 사유'에 포함되지 않는다고 서술함. 벤처기업법 시행령 원문을 직접 확인하지 못해 양쪽 서술을 모두 남김."
+  },
+  "venture_law_option_grant_limits": {
+    "_description": "벤처기업육성에 관한 특별법 제16조의3 및 시행령 제11조의3 - 부여 한도",
+    "unlisted_venture_total_grant_limit_ratio": 0.5,
+    "external_expert_grant_limit_ratio": 0.1,
+    "below_market_price_grant_limit_per_person_krw": 2000000000,
+    "below_market_price_limit_formula": "(부여일 기준 주식의 시가 - 행사가격) x 행사대상 주식수 의 합계가 1인당 20억원 이하",
+    "effective_from": "2026-07-01",
+    "as_of": "2026-09-05",
+    "source_url": "https://www.law.go.kr/LSW//lumLsLinkPop.do?lspttninfSeq=59732&chrClsCd=010202",
+    "source_name": "국가법령정보센터 - 벤처기업육성에 관한 특별법 시행령 제11조의3 (대통령령 제36480호, 2026-06-30 일부개정, 시행 2026-07-01)",
+    "corroborating_source_url": "https://www.gov.kr/portal/service/serviceInfo/142000000025",
+    "corroborating_source_name": "정부24 - 벤처기업 주식매수선택권 제도 (비상장 벤처기업 발행주식총수의 50% 이내, 외부 전문가 10% 이내)",
+    "note": "시가 이하 행사가격 부여 한도 20억원은 2026-07-01 시행 시행령 개정으로 확대된 값. 세제 항목은 아니지만 스톡옵션 설계에 직접 영향을 줌."
+  },
+  "kosdaq_ipo_lockup": {
+    "_description": "코스닥시장 상장규정 제26조제1항 - 신규상장 의무보유(보호예수)",
+    "regulation_article": "코스닥시장 상장규정 제26조제1항",
+    "largest_shareholder_months": 6,
+    "largest_shareholder_months_tech_growth": 12,
+    "option_exercised_after_listing": {
+      "subject": "상장신청인의 최대주주등이 상장일 이후 주식매수선택권의 행사로 취득하는 주식 (제26조제1항 제6호)",
+      "period": "상장일부터 6개월 (기술성장기업 또는 신속이전기업은 1년)",
+      "effect": "의무보유 기간 중 스톡옵션을 행사해 취득한 주식은 취득 시점부터 '잔여' 의무보유 기간까지 처분 제한. 예) 신규상장 후 2개월 시점에 행사하면 남은 4개월간 의무보유",
+      "months": 6,
+      "months_tech_growth": 12
+    },
+    "granted_before_vs_after_listing": {
+      "granted_before_exercised_before_listing": "상장 전 부여·상장 전 행사분은 상장일부터 6개월(기술성장기업·신속이전기업 1년) 의무보유",
+      "granted_before_exercised_after_listing": "상장 전 부여분을 상장 이후 행사해 취득한 주식도 의무보유 대상. 취득 시점부터 잔여 의무보유 기간까지 처분 제한",
+      "note": "코스닥시장 상장규정 제26조제1항제6호는 '상장일 이후 주식매수선택권의 행사로 취득하는 주식'을 부여 시점 구분 없이 대상으로 규정함. 다만 제도 도입 취지(2022년 개정)는 상장 전 부여분의 상장 직후 매도 차단이며, 상장 후 신규 부여분에 대한 별도 구분 규정은 규정 원문에서 확인되지 않음."
+    },
+    "extension": "경영투명성·경영안정성·투자자 보호 등을 위해 한국거래소가 필요하다고 인정하는 경우 의무보유 대상자와 협의하여 2년 이내의 범위에서 기간 연장 가능 (제26조제1항 단서)",
+    "other_lockup_periods": {
+      "acquirer_of_largest_shareholder_shares_within_1y_before_filing": "상장일부터 6개월 (기술성장기업·신속이전기업 1년)",
+      "third_party_allotment_within_1y_before_filing": "상장일부터 6개월 (기술성장기업·신속이전기업 1년)",
+      "venture_capital_or_professional_investor_under_2y": "상장일부터 1개월 (상장신청일 현재 자본금 기준 각 10% 한도)",
+      "underwriter_holding_under_6m": "상장일부터 6개월 (취득가격과 공모가격의 괴리율이 30% 미만이면 3개월)",
+      "krx_designated_others": "상장일부터 한국거래소와 협의하여 정한 2년 이내 기간"
+    },
+    "rule_introduced": "2022-03-18 시행 (시행일 이후 상장예비심사를 신청하는 법인부터 적용)",
+    "as_of": "2026-09-05",
+    "source_url": "https://kind.krx.co.kr/external/dst/notice/11800/2026%20%EC%BD%94%EC%8A%A4%EB%8B%A5%20%EC%83%81%EC%9E%A5%EC%8B%AC%EC%82%AC%20%EC%9D%B4%ED%95%B4%EC%99%80%20%EC%8B%A4%EB%AC%B4.pdf",
+    "source_name": "한국거래소 KIND 「2026 코스닥 상장심사 이해와 실무」 pp.37-38 - 코스닥시장 상장규정 제26조제1항 원문 인용",
+    "corroborating_source_url": "https://www.fsc.go.kr/po010101/77406",
+    "corroborating_source_name": "금융위원회 보도자료(2022-02-22) '신규 상장기업 임원의 주식 의무보유가 강화됩니다'",
+    "note": "의무보유 대상은 '최대주주등'(최대주주 및 특수관계인, 상법상 업무집행지시자 포함)임. 일반 임직원이 상장 후 스톡옵션을 행사해 취득한 주식은 최대주주등에 해당하지 않는 한 코스닥 상장규정상 의무보유 대상이 아님."
+  },
+  "base_interest_rate": {
+    "name": "한국은행 기준금리",
+    "rate": 0.03,
+    "as_of": "2026-08-27",
+    "decided_at": "2026-08-27 금융통화위원회 통화정책방향 결정회의",
+    "source_url": "https://www.bok.or.kr/portal/singl/baseRate/list.do?dataSeCd=01&menuNo=200643",
+    "source_name": "한국은행 - 한국은행 기준금리 추이 (2026-08-27 변경, 연 3.00%)",
+    "note": "현재가치 할인율로 사용. 2026-09-05 웹 확인. 한국은행 영문 보도자료(Monetary Policy Decision, August 27, 2026) 원문: 'The Monetary Policy Board of the Bank of Korea decided today to raise the Base Rate by 25 basis points from 2.75% to 3.00%.' 2025-05-29 2.50%로 인하된 뒤 2026-07-16 2.75%(3년 9개월 만의 인상), 2026-08-27 3.00%로 2회 연속 인상됨. 2026-09-05 현재 이후 금통위 결정 없음."
+  }
+}

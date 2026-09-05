@@ -1,0 +1,8 @@
+{
+  "name": "ipo-eval",
+  "version": "0.3.0",
+  "description": "우리 회사가 코스닥에 상장하면 내 스톡옵션은 얼마일까 — 최근 5년 코스닥 상장 실데이터로 계산해 Threads 글로 만들어 준다.",
+  "author": {
+    "name": "albertrim"
+  }
+}

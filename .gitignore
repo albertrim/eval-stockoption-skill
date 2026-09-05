@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+builder/.venv/
+builder/.cache/
+builder/.env
+builder/build.log
+builder/build_report.txt
+builder/spike_out/

@@ -1,0 +1,329 @@
+"""ipo-eval 계산 엔진 테스트. 표준 unittest만 쓴다.
+
+  python3 scripts/tests/test_all.py
+"""
+from __future__ import annotations
+
+import datetime as dt
+import json
+import shutil
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from lib import comps, money, store, tax, threads, update, validate  # noqa: E402
+from lib.option_value import _add_months, vested_ratio  # noqa: E402
+
+
+class TestMoney(unittest.TestCase):
+    def test_units_always_present(self):
+        self.assertEqual(money.krw(3_000), "3,000원")
+        self.assertEqual(money.krw(29_900_000), "2,990만원")
+        self.assertEqual(money.krw(108_000_000), "1억800만원")
+        self.assertEqual(money.krw(550_000_000), "5억5,000만원")
+        self.assertEqual(money.krw(55_000_000_000), "550억원")
+        self.assertEqual(money.krw(100_000_000), "1억원")
+
+    def test_rounding_does_not_produce_1억0000만원(self):
+        # 9,999.6만원이 반올림으로 1억이 되는 경계
+        self.assertEqual(money.krw(199_999_500), "2억원")
+
+    def test_negative_is_zero_not_minus(self):
+        self.assertEqual(money.krw(-5_000_000), "0원")
+
+    def test_none_is_dash(self):
+        self.assertEqual(money.krw(None), "—")
+        self.assertEqual(money.won(None), "—")
+
+
+class TestVesting(unittest.TestCase):
+    SCHED = [{"after_months": 24, "cumulative_pct": 0.5},
+             {"after_months": 36, "cumulative_pct": 0.75},
+             {"after_months": 48, "cumulative_pct": 1.0}]
+
+    def test_before_first_step_is_zero(self):
+        self.assertEqual(vested_ratio("2023-03-15", self.SCHED, dt.date(2025, 3, 14)), 0.0)
+
+    def test_on_the_day_counts(self):
+        self.assertEqual(vested_ratio("2023-03-15", self.SCHED, dt.date(2025, 3, 15)), 0.5)
+
+    def test_steps(self):
+        self.assertEqual(vested_ratio("2023-03-15", self.SCHED, dt.date(2026, 6, 1)), 0.75)
+        self.assertEqual(vested_ratio("2023-03-15", self.SCHED, dt.date(2030, 1, 1)), 1.0)
+
+    def test_month_end_does_not_overflow(self):
+        self.assertEqual(_add_months(dt.date(2024, 1, 31), 1), dt.date(2024, 2, 29))
+        self.assertEqual(_add_months(dt.date(2023, 1, 31), 1), dt.date(2023, 2, 28))
+        self.assertEqual(_add_months(dt.date(2023, 12, 15), 12), dt.date(2024, 12, 15))
+
+
+class TestValidate(unittest.TestCase):
+    BASE = {"name": "테스트", "sector_tag": "it_saas", "founded_year": 2019,
+            "revenue_krw": 1_000_000_000, "stage": 3, "stage_date": "2026-01-01",
+            "shares_outstanding": 1_000_000}
+
+    def test_good_profile_passes(self):
+        self.assertEqual(validate.validate_company(dict(self.BASE)), [])
+
+    def test_negative_revenue_caught(self):
+        p = dict(self.BASE, revenue_krw=-1)
+        self.assertTrue(any("음수" in e for e in validate.validate_company(p)))
+
+    def test_stage_out_of_range_caught(self):
+        self.assertTrue(any("0~5" in e for e in validate.validate_company(dict(self.BASE, stage=7))))
+
+    def test_future_filing_date_caught(self):
+        p = dict(self.BASE, stage_date="2099-01-01")
+        self.assertTrue(any("미래" in e for e in validate.validate_company(p)))
+
+    def test_bad_sector_caught(self):
+        p = dict(self.BASE, sector_tag="saas")
+        self.assertTrue(any("업종" in e for e in validate.validate_company(p)))
+
+    def test_missing_shares_and_round_caught(self):
+        p = dict(self.BASE); p.pop("shares_outstanding")
+        self.assertTrue(any("발행주식수" in e for e in validate.validate_company(p)))
+
+    OPT = {"quantity": 5000, "strike_krw": 3000, "grant_date": "2023-03-15",
+           "expiry_date": "2030-03-14",
+           "vest_schedule": [{"after_months": 24, "cumulative_pct": 1.0}]}
+
+    def test_good_option_passes(self):
+        self.assertEqual(validate.validate_option(dict(self.OPT)), [])
+
+    def test_expiry_before_grant_caught(self):
+        o = dict(self.OPT, expiry_date="2022-01-01")
+        self.assertTrue(any("만료일" in e for e in validate.validate_option(o)))
+
+    def test_zero_strike_caught(self):
+        self.assertTrue(any("행사가" in e for e in validate.validate_option(dict(self.OPT, strike_krw=0))))
+
+    def test_schedule_not_reaching_100_caught(self):
+        o = dict(self.OPT, vest_schedule=[{"after_months": 24, "cumulative_pct": 0.5}])
+        self.assertTrue(any("100%" in e for e in validate.validate_option(o)))
+
+    def test_schedule_going_backwards_caught(self):
+        o = dict(self.OPT, vest_schedule=[{"after_months": 24, "cumulative_pct": 0.8},
+                                          {"after_months": 36, "cumulative_pct": 0.5},
+                                          {"after_months": 48, "cumulative_pct": 1.0}])
+        self.assertTrue(any("줄었" in e for e in validate.validate_option(o)))
+
+
+class TestComps(unittest.TestCase):
+    def test_metric_choice(self):
+        self.assertEqual(comps.pick_metric(1e10, 1e9, True), "per")
+        self.assertEqual(comps.pick_metric(1e10, -1e9, False), "psr")
+        self.assertEqual(comps.pick_metric(0, -1e9, False), "abs")
+
+    def test_tiny_revenue_uses_absolute_marketcap(self):
+        # 임상 단계 바이오: 매출 8억에 PSR을 곱하면 근거 없는 숫자가 나온다
+        self.assertEqual(comps.pick_metric(800_000_000, -1e10, False), "abs")
+        self.assertEqual(comps.pick_metric(3_000_000_000, -1e10, False), "psr")
+
+    def test_thin_profit_falls_back_to_psr(self):
+        # 매출 1,000억에 이익 10억(1%)이면 PER 26배를 곱해 시총 268억이 나온다.
+        # 흑자여도 매출로 봐야 한다.
+        self.assertEqual(comps.pick_metric(100e9, 1e9, True), "psr")
+        self.assertTrue(comps.thin_margin(100e9, 1e9))
+        # 이익률이 두툼하면 그대로 PER
+        self.assertEqual(comps.pick_metric(100e9, 10e9, True), "per")
+        self.assertFalse(comps.thin_margin(100e9, 10e9))
+        # 매출이 미미하면 PSR로 갈 수 없으니 PER을 유지한다
+        self.assertEqual(comps.pick_metric(1e9, 1e7, True), "per")
+
+    def test_percentiles_ordered(self):
+        rows = [{"ipo_psr": v} for v in (1, 2, 3, 4, 5, 6, 7, 8)]
+        q = comps.percentiles(rows, "psr")
+        self.assertLess(q["low"], q["mid"])
+        self.assertLess(q["mid"], q["high"])
+        self.assertEqual(q["n"], 8)
+
+    def test_single_comp_does_not_crash(self):
+        q = comps.percentiles([{"ipo_psr": 4.0}], "psr")
+        self.assertEqual(q["low"], 4.0)
+        self.assertEqual(q["high"], 4.0)
+
+    def test_band_is_wider_than_quartiles(self):
+        # 백테스트에서 p25~p75가 실제를 41%밖에 못 담아 p10~p90으로 넓혔다
+        self.assertLessEqual(comps.LOW_Q, 0.15)
+        self.assertGreaterEqual(comps.HIGH_Q, 0.85)
+
+    def test_group_covers_small_sectors(self):
+        self.assertIn("ecommerce_platform", comps.group_peers("beauty"))
+        self.assertIn("it_saas", comps.group_peers("ai_data"))
+
+
+class TestMoneySigned(unittest.TestCase):
+    def test_loss_is_shown_not_swallowed(self):
+        # 6개월 뒤 손실이 "0원"으로 삼켜지던 버그
+        self.assertEqual(money.krw(-54_949_687, signed=True), "-5,495만원")
+        self.assertEqual(money.krw(-54_949_687), "0원")
+
+    def test_jo_boundary(self):
+        self.assertEqual(money.krw(999_950_000_000), "1조원")
+        self.assertEqual(money.krw(1_000_000_000_000), "1조원")
+        self.assertEqual(money.krw(1_683_800_000_000), "1조6,838억원")
+
+
+class TestTax(unittest.TestCase):
+    """세금은 손계산과 맞춰 고정한다. tax_params.json 값이 바뀌면 여기서 깨져야 한다."""
+
+    def test_progressive_income_tax(self):
+        self.assertEqual(round(tax.income_tax(300_000_000)), 103_466_000)
+
+    def test_zero_and_negative(self):
+        self.assertEqual(tax.income_tax(0), 0.0)
+        self.assertEqual(tax.income_tax(-1_000_000), 0.0)
+
+    def test_venture_exemption_applies_first(self):
+        r = tax.exercise_tax(300_000_000, 0)
+        self.assertEqual(r["exempt"], 200_000_000)
+        self.assertEqual(round(r["tax"]), 21_516_000)
+
+    def test_marginal_rate_stacks_on_salary(self):
+        low = tax.exercise_tax(300_000_000, 0)["tax"]
+        high = tax.exercise_tax(300_000_000, 80_000_000)["tax"]
+        self.assertGreater(high, low)
+        self.assertEqual(round(high), 38_522_000)
+
+    def test_non_venture_pays_much_more(self):
+        v = tax.exercise_tax(100_000_000, 0, venture=True)["tax"]
+        nv = tax.exercise_tax(100_000_000, 0, venture=False)["tax"]
+        self.assertEqual(v, 0.0)
+        self.assertEqual(round(nv), 21_516_000)
+
+    def test_transfer_tax_is_kosdaq_rate(self):
+        self.assertEqual(round(tax.transfer_tax(100_000_000)), 200_000)
+
+    def test_employee_has_no_lockup(self):
+        self.assertEqual(tax.lockup_months(major_shareholder=False), 0)
+        self.assertGreater(tax.lockup_months(major_shareholder=True), 0)
+
+
+class TestFanCap(unittest.TestCase):
+    def test_extreme_outlier_is_clamped(self):
+        rows = [{"ipo_psr": v} for v in (1, 1.1, 1.2, 1.3, 99)]
+        q = comps.percentiles(rows, "psr")
+        self.assertLessEqual(q["high"], q["mid"] * comps.FAN_CAP + 1e-9)
+        self.assertGreaterEqual(q["low"], q["mid"] / comps.FAN_CAP - 1e-9)
+
+    def test_order_never_inverts(self):
+        for vals in ([1], [1, 100], [5, 5, 5], [0.1, 2, 3, 400]):
+            q = comps.percentiles([{"ipo_psr": v} for v in vals], "psr")
+            self.assertLessEqual(q["low"], q["mid"])
+            self.assertLessEqual(q["mid"], q["high"])
+
+
+class TestThreadsConsistency(unittest.TestCase):
+    """글에 찍힌 숫자가 계산 결과와 같은 기준인지. 결함 1~3이 전부 여기서 났다."""
+
+    def _result(self, *, scope="IT·소프트웨어", qty=5000, qty_ipo=3750, after=(1, 2, 3)):
+        return {
+            "company": {"name": "T", "sector_tag": "it_saas"},
+            "prediction": {"probability": 0.6, "probability_is_estimate": False,
+                           "stage_label": "예비심사 청구", "expected_ipo_label": "2027년 상반기",
+                           "expected_ipo_date": "2027-01", "rate_basis": "x", "sample_n": 10,
+                           "approval_rate": 0.7, "listing_rate_given_approval": 0.9,
+                           "track": "일반", "reasons": []},
+            "valuation": {"market_cap_krw": {"보수": 1e10, "기준": 2e10, "낙관": 3e10},
+                          "price_per_share": {"보수": 1000, "기준": 2000, "낙관": 3000},
+                          "comps_n": 5, "comps_scope": scope, "comps": [{"name": "A"}],
+                          "criteria": "c", "relaxed": False, "metric": "psr",
+                          "metric_label": "PSR",
+                          "quartiles": {"low": 1, "mid": 2, "high": 3},
+                          "new_share_ratio": 0.2, "shares_at_ipo": 6_000_000},
+            "option": {"quantity": qty, "quantity_at_ipo": qty_ipo, "quantity_today": qty_ipo,
+                       "strike_krw": 500, "vested_today_pct": 0.75, "vested_at_ipo_pct": 0.75,
+                       "expired_before_ipo": False, "expiry_date": "2030-01-01",
+                       "ownership_pct": qty_ipo / 6_000_000, "lockup_months": 0,
+                       "is_venture": True, "median_ret_6m": -0.1, "warnings": [],
+                       "discount_label": "한국은행 기준금리 연 3.00%", "discount_years": 0.4,
+                       "sellable_date": "2027-01",
+                       "scenarios": {k: {"after_tax_krw": v * 1e7, "present_value_krw": v * 1e7,
+                                         "price_per_share": 2000, "gross_krw": v * 1e7,
+                                         "exercise_cost_krw": 1e6, "income_tax_krw": 0,
+                                         "tax_free_krw": 1e7, "transfer_tax_krw": 1e5,
+                                         "after_tax_6m_krw": -1e7 if k == "보수" else v * 1e7}
+                                     for k, v in zip(("보수", "기준", "낙관"), after)}},
+        }
+
+    def test_headline_quantity_matches_the_money(self):
+        main = threads.main_post(self._result())
+        self.assertIn("5,000주 중 상장 시점 행사 가능 3,750주", main)
+
+    def test_full_vest_shows_plain_quantity(self):
+        main = threads.main_post(self._result(qty=5000, qty_ipo=5000))
+        self.assertIn("내 스톡옵션 5,000주 (행사가", main)
+
+    def test_scope_label_not_faked(self):
+        main = threads.main_post(self._result(scope="코스닥"))
+        self.assertIn("최근 코스닥 상장 5곳 기준", main)
+        self.assertNotIn("IT·소프트웨어", main)
+
+    def test_six_month_loss_is_negative_in_replies(self):
+        rep = threads.replies(self._result())
+        joined = "\n".join(rep)
+        self.assertIn("-1,000만원", joined)
+
+    def test_main_post_within_limit(self):
+        self.assertLessEqual(len(threads.main_post(self._result())), threads.LIMIT)
+
+    def test_main_post_shows_only_the_mid_value(self):
+        main = threads.main_post(self._result())
+        self.assertIn("· 예상 시총 200억원", main)
+        self.assertNotIn("100억원 / 200억원", main)
+        self.assertIn("· 세후 손에 쥐는 돈 2,000만원", main)
+        self.assertNotIn("1,000만원 / 2,000만원", main)
+
+    def test_replies_keep_the_range(self):
+        joined = "\n".join(threads.replies(self._result()))
+        self.assertIn("[범위]", joined)
+        self.assertIn("100억원~300억원", joined)
+
+
+class TestUpdateCheck(unittest.TestCase):
+    """데이터만 갱신해도 스킬이 최신인 것처럼 보이면 안 된다."""
+
+    REMOTE = {"data_version": "2026-10-01", "skill_version": "0.2.0"}
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self._home, self._data = store.HOME, store.DATA
+        self._check = store.LAST_CHECK
+        store.HOME = Path(self.tmp)
+        store.DATA = store.HOME / "data"
+        store.PROFILES = store.HOME / "profiles"
+        store.LAST_CHECK = store.HOME / "last_check"
+        # 저장소의 VERSION 파일 값에 테스트가 끌려다니면 안 된다. 양쪽 다 고정한다.
+        self._rm = update._remote_manifest
+        self._rsv = update._remote_skill_version
+        self._isv = update._installed_skill_version
+        update._remote_manifest = lambda: self.REMOTE
+        update._remote_skill_version = lambda r: "0.2.0"
+        update._installed_skill_version = lambda: "0.1.0"
+
+    def tearDown(self):
+        store.HOME, store.DATA, store.LAST_CHECK = self._home, self._data, self._check
+        store.PROFILES = store.HOME / "profiles"
+        update._remote_manifest, update._remote_skill_version = self._rm, self._rsv
+        update._installed_skill_version = self._isv
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_skill_update_survives_a_data_only_apply(self):
+        first = update.check(force=True)
+        self.assertTrue(first["skill"]["changed"])
+        # update apply --data 는 원격 manifest를 통째로 내려받는다. 그 안에 skill_version이
+        # 들어 있어, 예전에는 이 시점에 스킬도 최신으로 잘못 표시됐다.
+        store.ensure()
+        (store.DATA / "manifest.json").write_text(json.dumps(self.REMOTE), encoding="utf-8")
+        after = update.check(force=True)
+        self.assertFalse(after["data"]["changed"])
+        self.assertTrue(after["skill"]["changed"])
+        self.assertTrue(after["update_available"])
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

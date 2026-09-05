@@ -1,0 +1,210 @@
+"""Threads 게시글 포맷 — 메인 1개(500자 이내) + 근거 답글."""
+from __future__ import annotations
+
+from . import dataset
+from .money import krw, multiple, pctstr, won
+from .valuate import SCEN
+
+LIMIT = 500
+TRIPLE = " / "
+MID = "기준"      # 메인 글은 기준 시나리오 하나만 쓴다. 범위는 답글에 남긴다.
+
+
+def _all_zero(opt: dict) -> bool:
+    return all(not (s or {}).get("after_tax_krw") for s in opt["scenarios"].values())
+
+
+def _zero_reason(opt: dict) -> str:
+    """0원이 나온 이유. 이유 없이 0원만 보여주면 오해한다."""
+    if all(v is None for v in
+           ((s or {}).get("price_per_share") for s in opt["scenarios"].values())):
+        return "예상 시총을 계산하지 않아 옵션 가치도 내지 못했습니다"
+    if opt.get("quantity_at_ipo") == 0:
+        return "상장 예상 시점에 아직 행사할 수 있는 물량이 없습니다"
+    best = (opt["scenarios"].get("낙관") or {}).get("price_per_share")
+    if best and opt["strike_krw"] >= best:
+        return f"행사가 {won(opt['strike_krw'])}이 낙관 시나리오 주당가 {won(best)}보다 높습니다"
+    return "계산 결과가 0원입니다"
+
+
+def _krw_signed(v):
+    return krw(v, signed=True)
+
+
+def _triple(values: dict, fmt) -> str:
+    return TRIPLE.join(fmt(values.get(k)) for k in SCEN)
+
+
+def _mid(values: dict, fmt) -> str:
+    return fmt(values.get(MID))
+
+
+def main_post(result: dict) -> str:
+    c = result["company"]
+    pred, val = result["prediction"], result["valuation"]
+    opt = result.get("option")
+    lines = ["🏢 우리 회사가 코스닥 가면?"]
+    prob = pctstr(pred["probability"])
+    if pred["probability_is_estimate"]:
+        prob += "(추정)"
+    lines.append(f"· 상장 가능성 {prob} · {pred['stage_label']}")
+    lines.append(f"· 예상 상장 {pred['expected_ipo_label']}")
+    if val["market_cap_krw"].get(MID) is not None:
+        lines.append(f"· 예상 시총 {_mid(val['market_cap_krw'], krw)}")
+    else:
+        lines.append("· 예상 시총 — 계산하지 않았습니다")
+    if val["price_per_share"].get(MID):
+        lines.append(f"· 주당 {_mid(val['price_per_share'], won)}")
+    if val.get("split_hint"):
+        lines.append(f"· ({val['split_hint']['factor']}:1 액면분할 가정 시 "
+                     f"{won(val['split_hint']['price_after'])})"
+                     if val["split_hint"]["direction"] == "split" else
+                     f"· ({val['split_hint']['factor']}주 병합 가정 시 "
+                     f"{won(val['split_hint']['price_after'])})")
+
+    if opt and not opt["expired_before_ipo"] and _all_zero(opt):
+        lines += ["", f"내 스톡옵션 {opt['quantity']:,}주 (행사가 {won(opt['strike_krw'])}) → 0원",
+                  "· " + _zero_reason(opt)]
+    elif opt and not opt["expired_before_ipo"]:
+        sc = opt["scenarios"]
+        after = {k: sc[k].get("after_tax_krw") for k in SCEN}
+        pv = {k: sc[k].get("present_value_krw") for k in SCEN}
+        held = opt["quantity"]
+        usable = opt["quantity_at_ipo"]
+        head = (f"내 스톡옵션 {held:,}주 (행사가 {won(opt['strike_krw'])})" if usable >= held
+                else f"내 스톡옵션 {held:,}주 중 상장 시점 행사 가능 {usable:,}주 "
+                     f"(행사가 {won(opt['strike_krw'])})")
+        lines += ["", head,
+                  f"· 세후 손에 쥐는 돈 {_mid(after, krw)}",
+                  f"· 오늘 기준으로 당기면 {_mid(pv, krw)}"]
+        if opt.get("ownership_pct"):
+            lines.append(f"· 지분 {pctstr(opt['ownership_pct'], 2)}")
+    elif opt:
+        lines += ["", f"내 스톡옵션 {opt['quantity']:,}주 → 0원",
+                  f"· 행사 기간이 {opt['expiry_date']}에 끝납니다",
+                  f"· 상장 예상은 {pred['expected_ipo_date']}"]
+
+    scope = val.get("comps_scope") or "코스닥"
+    tail = (f"최근 코스닥 상장 {val['comps_n']}곳 기준" if scope == "코스닥"
+            else f"최근 코스닥 상장 {scope} {val['comps_n']}곳 기준")
+    lines += ["", f"⚠️ 재미로 보는 추정. {tail}.", "#스톡옵션 #코스닥 #IPO"]
+    return "\n".join(lines)
+
+
+def replies(result: dict) -> list[str]:
+    pred, val = result["prediction"], result["valuation"]
+    opt = result.get("option")
+    out: list[str] = []
+
+    names = ", ".join(c["name"] for c in val["comps"][:8])
+    more = f" 외 {val['comps_n'] - 8}곳" if val["comps_n"] > 8 else ""
+    q = val["quartiles"]
+    if val["metric"] == "abs":
+        band = f"공모시총 {krw(q['low'])} / {krw(q['mid'])} / {krw(q['high'])}"
+    else:
+        band = (f"{val['metric_label']} {multiple(q['low'])} / {multiple(q['mid'])} / "
+                f"{multiple(q['high'])}")
+    r1 = [f"[비교기업 {val['comps_n']}곳] {names}{more}", f"기준: {val['criteria']}", band]
+    if val.get("metric_note"):
+        r1.append(val["metric_note"])
+    if val["relaxed"]:
+        r1.append("표본이 모자라 조건을 넓혔습니다.")
+    if val.get("comps_thin"):
+        r1.append(f"비교기업이 {val['comps_n']}곳뿐이라 보수·낙관 값은 몇 곳에 크게 좌우됩니다.")
+    u = val.get("underwriter_method")
+    if u:
+        r1.append(f"주관사 방식으로 보면 평가액 {krw(u['valuation_krw'])} "
+                  f"× 할인 {pctstr(u['discount_low'])}~{pctstr(u['discount_high'])} "
+                  f"→ {krw(u['band_low_krw'])}~{krw(u['band_high_krw'])} (신고서 {u['n']}건)")
+    out.append("\n".join(r1))
+
+    # 메인 글이 기준값 하나만 보여주므로, 폭은 여기서 반드시 알린다.
+    caps, pps = val["market_cap_krw"], val["price_per_share"]
+    r2 = []
+    if caps.get("보수") and caps.get("낙관"):
+        span = f"[범위] 위 숫자는 기준 시나리오 하나입니다. 시총 {krw(caps['보수'])}~{krw(caps['낙관'])}"
+        if pps.get("보수") and pps.get("낙관"):
+            span += f", 주당 {won(pps['보수'])}~{won(pps['낙관'])}"
+        r2.append(span + "까지 벌어집니다(비교기업 배수 하위 10%~상위 90%). 최악·최선이 아닙니다.")
+    if opt and not _all_zero(opt):
+        a = {k: opt["scenarios"][k].get("after_tax_krw") for k in SCEN}
+        if a.get("보수") and a.get("낙관"):
+            r2.append(f"같은 폭으로 세후 가치는 {krw(a['보수'])}~{krw(a['낙관'])}입니다.")
+    r2.append(f"[가정] 상장 때 신주를 {pctstr(val['new_share_ratio'])} 더 찍는다고 봤습니다"
+              f"({val['shares_at_ipo']:,}주 기준)." if val.get("shares_at_ipo") else "[가정]")
+    if val.get("median_ret_6m") is not None:
+        r2.append(f"참고로 최근 상장사는 공모가 대비 6개월 뒤 중앙값 {pctstr(val['median_ret_6m'], 1)}입니다.")
+    if opt:
+        r2.append(f"지금 가치는 {opt['discount_label']}로 {opt['discount_years']}년 할인했습니다.")
+        sc = opt["scenarios"].get("기준", {})
+        if sc.get("gross_krw"):
+            head = (f"세금(기준 시나리오)은 벤처기업 비과세 {krw(sc['tax_free_krw'])} 적용 후 "
+                    if opt.get("is_venture")
+                    else "세금(기준 시나리오)은 벤처기업 비과세 없이 ")
+            r2.append(head + f"소득세 {krw(sc['income_tax_krw'])} + "
+                             f"증권거래세 {krw(sc['transfer_tax_krw'])}.")
+            if not opt.get("is_venture"):
+                r2.append("벤처기업 인증이 있으면 행사이익 연 2억원까지 비과세라 세금이 크게 줄어듭니다.")
+    bt = result.get("backtest") or {}
+    if bt.get("n"):
+        r2.append(f"이 방식으로 실제 상장사 {bt['n']}곳을 거꾸로 맞혀보면 시총 오차 중앙값 "
+                  f"{pctstr(bt['mape_median'])}, 보수~낙관 범위 안에 들어간 비율은 "
+                  f"{pctstr(bt['inside_rate'])}입니다.")
+    if val.get("basis_note"):
+        r2.append(val["basis_note"])
+    if val.get("split_hint"):
+        r2.append(val["split_hint"]["message"])
+    r2.append(f"데이터 기준일 {dataset.data_as_of()}.")
+    out.append("\n".join(r2))
+
+    r3 = [f"[상장 가능성 근거] {pred['rate_basis']} 예비심사 {pred['sample_n']}건 중 "
+          f"승인 {pctstr(pred['approval_rate'])}, 승인 뒤 상장 {pctstr(pred['listing_rate_given_approval'])}."]
+    r3.append(f"트랙: {pred['track']}")
+    gate = result.get("listing_gate") or {}
+    if gate.get("verdict") in {"미달", "규모 미달"}:
+        # 근거를 덮어쓰지 않고 앞에 붙인다. 승인율·트랙 정보는 그대로 남아야 한다.
+        r3 = ["[상장요건] " + n for n in gate["notes"]] + r3
+    peers = result.get("peers_in_review") or []
+    if peers:
+        p = peers[0]
+        r3.append(f"비슷한 규모로 지금 심사 중: {p['name']}"
+                  f"(매출 {krw(p['revenue_krw'])}, {p['filed_date']} 청구, {p['status']})")
+    out.append("\n".join(r3))
+
+    if opt:
+        sc = opt["scenarios"]
+        a6 = {k: sc[k].get("after_tax_6m_krw") for k in SCEN}
+        cost = sc.get("기준", {}).get("exercise_cost_krw")
+        r4 = []
+        if cost and not _all_zero(opt):
+            r4.append(f"[행사할 때 드는 돈] {krw(cost)} (행사가 × 행사 수량). "
+                      "이 돈을 먼저 내야 주식이 됩니다.")
+        if (any(v for v in a6.values()) and opt.get("median_ret_6m") is not None
+                and not _all_zero(opt)):
+            r4.append(f"상장 6개월 뒤에 판다면 보수/기준/낙관 순으로 {_triple(a6, _krw_signed)}. "
+                      f"최근 상장사 중앙값 {pctstr(opt['median_ret_6m'], 1)}를 적용한 값입니다. "
+                      "세금은 공모가 기준으로 이미 정해지니, 주가가 빠지면 그만큼 손해입니다.")
+        r4.append(f"[행사 가능] 오늘 {opt['quantity_today']:,}주"
+              f"({pctstr(opt['vested_today_pct'])}), 상장 예상 시점 {opt['quantity_at_ipo']:,}주"
+              f"({pctstr(opt['vested_at_ipo_pct'])}).")
+        if opt.get("expiry_date"):
+            r4.append(f"행사 기간 만료 {opt['expiry_date']}.")
+        if opt.get("ownership_pct") and opt["ownership_pct"] >= 0.01:
+            r4.append(f"지분 {pctstr(opt['ownership_pct'], 2)}면 최대주주등에 해당할 수 있습니다. "
+                      "그 경우 상장 후 6개월(기술성장기업 1년) 의무보유가 걸립니다.")
+        if opt.get("lockup_months"):
+            r4.append(f"상장 후 {opt['lockup_months']}개월은 팔 수 없다고 봤습니다"
+                      f"(매도 가능 {opt['sellable_date']}).")
+        if val.get("fan_collapsed"):
+            r4.append("비교기업 배수가 좁게 몰려 있어 보수·기준·낙관 차이가 크지 않습니다.")
+        for w in opt["warnings"]:
+            r4.append("⚠️ " + w)
+        out.append("\n".join(r4))
+    return out
+
+
+def render(result: dict) -> dict:
+    main = main_post(result)
+    over = max(0, len(main) - LIMIT)
+    return {"main": main, "main_length": len(main), "over_limit": over,
+            "replies": replies(result)}

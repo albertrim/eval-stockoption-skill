@@ -76,6 +76,24 @@
    "n_listed": 52
   }
  },
+ "by_profit": {
+  "profitable": {
+   "n": 240,
+   "approval_rate": 0.8042,
+   "listing_rate_given_approval": 0.943,
+   "withdraw_rate": 0.1833,
+   "n_approved": 193,
+   "n_listed": 182
+  },
+  "loss": {
+   "n": 215,
+   "approval_rate": 0.6837,
+   "listing_rate_given_approval": 0.932,
+   "withdraw_rate": 0.2837,
+   "n_approved": 147,
+   "n_listed": 137
+  }
+ },
  "filed_to_listed_months": {
   "n": 297,
   "p25": 5.3,

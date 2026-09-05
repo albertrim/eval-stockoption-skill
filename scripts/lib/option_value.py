@@ -42,6 +42,11 @@ def evaluate(*, quantity: int, strike_krw: float, grant_date: str,
     vest_ipo = vested_ratio(grant_date, vest_schedule, ipo)
     qty_today = int(round(quantity * vest_today))
     qty_ipo = int(round(quantity * vest_ipo))
+    # 상장 6개월 뒤에 판다면 그 사이에 더 행사 가능해진 물량도 팔 수 있다.
+    # 상장일 기준 수량을 그대로 쓰면 그만큼 빠진 값이 나온다.
+    six = _add_months(ipo, 6)
+    vest_6m = vested_ratio(grant_date, vest_schedule, six)
+    qty_6m = int(round(quantity * vest_6m))
 
     warnings: list[str] = []
     expired = False
@@ -68,15 +73,22 @@ def evaluate(*, quantity: int, strike_krw: float, grant_date: str,
     stt_rate_note = "코스닥 증권거래세"
     ret6 = val.get("median_ret_6m")
 
+    exp_date = dt.date.fromisoformat(expiry_date) if expiry_date else None
+    # 만료가 6개월 안에 오면 그 뒤 가득분은 못 쓴다
+    qty6_max = qty_ipo if (exp_date and exp_date < six) else qty_6m
+    spread = val.get("ret_6m_spread") or {}
+
     rows: dict[str, dict] = {}
     for name in SCEN:
         price = val["price_per_share"].get(name)
         qty = 0 if expired else qty_ipo
+        qty6 = 0 if expired else qty6_max
         if price is None or qty == 0:
             rows[name] = {"price_per_share": price, "quantity": qty, "gross_krw": 0.0,
                           "exercise_cost_krw": 0.0, "income_tax_krw": 0.0, "tax_free_krw": 0.0,
                           "transfer_tax_krw": 0.0, "after_tax_krw": 0.0,
-                          "present_value_krw": 0.0, "after_tax_6m_krw": None}
+                          "present_value_krw": 0.0, "after_tax_6m_krw": None,
+                          "after_tax_6m_low_krw": None, "after_tax_6m_high_krw": None}
             continue
         cost = strike_krw * qty                       # 행사할 때 내 돈이 나간다
         gain = max(0.0, price - strike_krw) * qty     # 근로소득으로 과세되는 행사이익
@@ -86,12 +98,16 @@ def evaluate(*, quantity: int, strike_krw: float, grant_date: str,
         after = max(0.0, proceeds - cost - t["tax"] - stt)
 
         # 상장 직후에 못 팔거나 안 팔았을 때 — 소득세는 공모가 기준으로 이미 확정된다.
-        after6 = None
-        if ret6 is not None:
-            price6 = price * (1 + ret6)
-            proceeds6 = max(0.0, price6 * qty)
-            stt6 = tax.transfer_tax(proceeds6)
-            after6 = proceeds6 - cost - t["tax"] - stt6
+        # 6개월 뒤 수익률은 한쪽으로 쏠려 있지 않아 하위 25%~상위 25%를 함께 낸다.
+        def _after6(ret: float | None, *, price=price, qty6=qty6) -> float | None:
+            if ret is None or qty6 == 0:
+                return None
+            g6 = max(0.0, price - strike_krw) * qty6
+            t6 = tax.exercise_tax(g6, salary_krw or 0.0, venture=is_venture)
+            proceeds6 = max(0.0, price * (1 + ret) * qty6)
+            return proceeds6 - strike_krw * qty6 - t6["tax"] - tax.transfer_tax(proceeds6)
+
+        after6 = _after6(ret6)
         rows[name] = {
             "price_per_share": price,
             "quantity": qty,
@@ -104,6 +120,9 @@ def evaluate(*, quantity: int, strike_krw: float, grant_date: str,
             "proceeds_krw": proceeds,
             "after_tax_krw": after,
             "after_tax_6m_krw": after6,
+            "after_tax_6m_low_krw": _after6(spread.get("p25")),
+            "after_tax_6m_high_krw": _after6(spread.get("p75")),
+            "quantity_6m": qty6,
             "present_value_krw": after / ((1 + r) ** years) if years > 0 else after,
         }
 
@@ -148,4 +167,6 @@ def evaluate(*, quantity: int, strike_krw: float, grant_date: str,
         "major_shareholder": major_shareholder,
         "salary_krw": salary_krw,
         "median_ret_6m": val.get("median_ret_6m"),
+        "ret_6m_spread": val.get("ret_6m_spread"),
+        "vested_6m_pct": vest_6m, "quantity_6m": qty6_max,
     }

@@ -165,3 +165,18 @@ def median_of(comps: list[dict], field: str) -> float | None:
         return None
     m = len(vals) // 2
     return vals[m] if len(vals) % 2 else (vals[m - 1] + vals[m]) / 2
+
+
+def spread_of(comps: list[dict], field: str) -> dict | None:
+    """분포의 p25·중앙값·p75와 플러스로 끝난 비율.
+
+    상장 후 주가는 한쪽으로 쏠려 있지 않다. 중앙값 하나만 내보내면 -16%라는
+    음수 한 개가 결과의 전부가 되는데, 실제로는 4곳 중 1곳 이상이 공모가를
+    크게 웃돈다. 한쪽만 보여주는 것도 틀리게 보여주는 것이다.
+    """
+    vals = sorted(c[field] for c in comps if c.get(field) is not None)
+    if len(vals) < MIN_COMPS:
+        return None
+    return {"p25": quantile(vals, 0.25), "median": quantile(vals, 0.50),
+            "p75": quantile(vals, 0.75), "n": len(vals),
+            "positive_rate": sum(1 for v in vals if v > 0) / len(vals)}

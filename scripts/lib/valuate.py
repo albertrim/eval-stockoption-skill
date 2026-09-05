@@ -125,6 +125,7 @@ def estimate(*, sector_tag: str, revenue: float | None, net_income: float | None
 
     split = _split_hint(per_share.get("기준")) or _split_hint(per_share.get("낙관"))
     ret6 = comps_mod.median_of(pool, "ret_6m")
+    ret6_spread = comps_mod.spread_of(pool, "ret_6m")
     cap6 = {k: (v * (1 + ret6) if v and ret6 is not None else None) for k, v in caps.items()}
 
     # 주관사 방식 — 신고서에서 뽑은 배수가 우리가 쓰는 배수와 같은 종류일 때만.
@@ -154,7 +155,7 @@ def estimate(*, sector_tag: str, revenue: float | None, net_income: float | None
                    "ret_6m": c.get("ret_6m")} for c in sorted(pool, key=lambda c: c["listing_date"], reverse=True)],
         "market_cap_krw": caps,
         "market_cap_6m_krw": cap6,
-        "median_ret_6m": ret6,
+        "median_ret_6m": ret6, "ret_6m_spread": ret6_spread,
         "fan_collapsed": _fan_collapsed(caps),
         "basis_note": basis_note,
         "scale_warning": scale_warning,

@@ -107,8 +107,13 @@ def replies(result: dict) -> list[str]:
     r1 = [f"[비교기업 {val['comps_n']}곳] {names}{more}", f"기준: {val['criteria']}", band]
     if val.get("metric_note"):
         r1.append(val["metric_note"])
+    # 몇 단계나 넓혔는지는 결과를 얼마나 믿을지 가른다. "넓혔습니다" 한 줄로는 안 보인다.
+    steps = val.get("relaxed_steps") or 0
     if val["relaxed"]:
-        r1.append("표본이 모자라 조건을 넓혔습니다.")
+        msg = f"같은 업종·매출 3배 이내로는 5곳을 못 채워 조건을 {steps}단계 넓혔습니다."
+        if steps >= 3:
+            msg += " 업종군까지 넘어간 표본이라 이 업종의 배수라고 보기 어렵습니다."
+        r1.append(msg)
     if val.get("comps_thin"):
         r1.append(f"비교기업이 {val['comps_n']}곳뿐이라 보수·낙관 값은 몇 곳에 크게 좌우됩니다.")
     u = val.get("underwriter_method")
@@ -179,11 +184,30 @@ def replies(result: dict) -> list[str]:
         if cost and not _all_zero(opt):
             r4.append(f"[행사할 때 드는 돈] {krw(cost)} (행사가 × 행사 수량). "
                       "이 돈을 먼저 내야 주식이 됩니다.")
+        # 6개월 뒤 주가는 한쪽으로 쏠려 있지 않다. 중앙값 하나만 적으면 음수 한 개가
+        # 결과의 전부가 되는데, 실제로는 3곳 중 1곳 이상이 공모가를 넘긴다.
+        sp = opt.get("ret_6m_spread") or {}
+        mid6 = sc.get("기준", {})
+        lo6, hi6 = mid6.get("after_tax_6m_low_krw"), mid6.get("after_tax_6m_high_krw")
+        has_spread = all(sp.get(k) is not None for k in ("p25", "p75", "n", "positive_rate"))
         if (any(v for v in a6.values()) and opt.get("median_ret_6m") is not None
                 and not _all_zero(opt)):
-            r4.append(f"상장 6개월 뒤에 판다면 보수/기준/낙관 순으로 {_triple(a6, _krw_signed)}. "
-                      f"최근 상장사 중앙값 {pctstr(opt['median_ret_6m'], 1)}를 적용한 값입니다. "
-                      "세금은 공모가 기준으로 이미 정해지니, 주가가 빠지면 그만큼 손해입니다.")
+            line = (f"[상장 6개월 뒤에 판다면] 기준 시나리오로 "
+                    f"{_krw_signed(mid6.get('after_tax_6m_krw'))}.")
+            if has_spread:
+                line += (f" 최근 상장사 {sp['n']}곳의 6개월 수익률은 "
+                         f"하위 25% {pctstr(sp['p25'], 1)} · 중앙값 {pctstr(opt['median_ret_6m'], 1)} · "
+                         f"상위 25% {pctstr(sp['p75'], 1)}로 갈렸고, "
+                         f"{pctstr(sp['positive_rate'])}는 공모가를 넘겼습니다.")
+                if lo6 is not None and hi6 is not None:
+                    line += f" 같은 폭을 적용하면 {_krw_signed(lo6)} ~ {_krw_signed(hi6)}입니다."
+            else:
+                line += f" 최근 상장사 중앙값 {pctstr(opt['median_ret_6m'], 1)}를 적용한 값입니다."
+            line += " 세금은 공모가 기준으로 이미 정해지니, 주가가 빠지면 그만큼 손해입니다."
+            r4.append(line)
+        if opt.get("quantity_6m") and opt["quantity_6m"] > opt["quantity_at_ipo"]:
+            r4.append(f"위 6개월 숫자는 그때까지 행사 가능해지는 {opt['quantity_6m']:,}주 기준입니다"
+                      f"(상장 시점 {opt['quantity_at_ipo']:,}주).")
         r4.append(f"[행사 가능] 오늘 {opt['quantity_today']:,}주"
               f"({pctstr(opt['vested_today_pct'])}), 상장 예상 시점 {opt['quantity_at_ipo']:,}주"
               f"({pctstr(opt['vested_at_ipo_pct'])}).")

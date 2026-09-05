@@ -217,7 +217,8 @@ def build_base_rates(pipe: dict, listings: list[dict], report: list[str]) -> dic
             "n_approved": len(approved), "n_listed": len(listed),
         }
 
-    out: dict = {"as_of": today.isoformat(), "overall": {}, "by_sector": {}}
+    out: dict = {"as_of": today.isoformat(), "overall": {}, "by_sector": {},
+                 "by_profit": {}}
     for years in (3, 5, 10):
         out["overall"][f"{years}y"] = rates(window(years))
 
@@ -225,6 +226,13 @@ def build_base_rates(pipe: dict, listings: list[dict], report: list[str]) -> dic
         sub = [r for r in window(5) if r["sector_tag"] == tag]
         if len(sub) >= 10:
             out["by_sector"][tag] = rates(sub)
+
+    # 흑자 여부는 청구 결과를 가르는 특징 중 표본이 충분한 유일한 것이다.
+    # 업종×흑자로 자르면 절반이 30건 미만이 되어 노이즈를 확률로 내보내게 된다.
+    for key, ok in (("profitable", True), ("loss", False)):
+        sub = [r for r in window(5) if ((r.get("net_income_krw") or 0) > 0) == ok]
+        if len(sub) >= 100:
+            out["by_profit"][key] = rates(sub)
 
     # 청구 → 상장 소요 개월 (실제 상장한 건, 최근 5년)
     months = []

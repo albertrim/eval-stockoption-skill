@@ -23,11 +23,19 @@ PRE_FILING_MONTHS = {0: 30, 1: 18, 2: 9}
 FLOOR, CEIL = 0.03, 0.92
 
 
-def _rates(sector_tag: str) -> tuple[dict, str]:
+def _rates(profitable: bool) -> tuple[dict, str]:
+    """승인율·상장률을 어느 표본에서 가져올지.
+
+    흑자 여부로 가른다. 최근 5년 청구 455건을 leave-one-out으로 채점하면
+    흑자 분리(Brier 0.2077)만 분리 없음(0.2105)보다 낫다. 업종별 분리는
+    0.2129로 오히려 나쁘고, 업종×흑자는 0.2138로 가장 나쁘다 — 셀 절반이
+    30건 미만이라 노이즈를 확률로 내보내게 된다. 그래서 업종은 쓰지 않는다.
+    """
     br = dataset.base_rates()
-    by = br.get("by_sector", {}).get(sector_tag)
-    if by and by.get("n", 0) >= 10 and by.get("approval_rate") is not None:
-        return by, f"{dataset.SECTOR_LABEL.get(sector_tag, sector_tag)} 업종 최근 5년"
+    key = "profitable" if profitable else "loss"
+    bp = (br.get("by_profit") or {}).get(key)
+    if bp and bp.get("approval_rate") is not None:
+        return bp, f"최근 5년 {'흑자' if profitable else '적자'} 청구 기업"
     return br["overall"]["5y"], "코스닥 전체 최근 5년"
 
 
@@ -41,7 +49,7 @@ def estimate(*, sector_tag: str, stage: int, stage_date: str | None,
              revenue: float | None, profitable: bool, founded_year: int | None,
              revenue_prev: float | None = None) -> dict:
     br = dataset.base_rates()
-    rates, rate_basis = _rates(sector_tag)
+    rates, rate_basis = _rates(profitable)
     approval = rates.get("approval_rate")
     listing = rates.get("listing_rate_given_approval")
     if approval is None or listing is None:
@@ -63,7 +71,10 @@ def estimate(*, sector_tag: str, stage: int, stage_date: str | None,
         prob = approval * listing * factor
         estimated = True
         reasons.append(
-            f"청구 시 상장 확률 {approval * listing:.0%}에 {STAGE_LABEL[stage]} 계수 {factor:.0%}를 곱한 추정값"
+            f"청구 시 상장 확률 {approval * listing:.0%}에 {STAGE_LABEL[stage]} 계수 "
+            f"{factor:.0%}를 곱한 값입니다. **이 계수 {factor:.0%}에는 근거 데이터가 없습니다.** "
+            "예비심사 청구 전 단계는 공개 통계가 없어, 주관사를 선정하고도 청구까지 못 가는 "
+            "회사를 감안한 가정값을 씁니다. 이 숫자의 불확실성은 대부분 여기서 옵니다."
         )
 
     # 소요 기간
@@ -131,8 +142,12 @@ def estimate(*, sector_tag: str, stage: int, stage_date: str | None,
         if med:
             reasons.append(f"설립 {age}년차. 이 업종은 설립 후 중앙값 {med:.0f}년에 예비심사를 청구")
 
+    prob = max(FLOOR, min(CEIL, prob))
+    if estimated:
+        # 근거 없는 계수를 곱한 값에 1% 단위를 붙이면 없는 정밀도를 파는 것이다.
+        prob = max(FLOOR, round(prob * 20) / 20)
     return {
-        "probability": round(max(FLOOR, min(CEIL, prob)), 3),
+        "probability": round(prob, 3),
         "probability_is_estimate": estimated or stalled,
         "stalled": stalled,
         "expected_ipo_date": expected.strftime("%Y-%m"),

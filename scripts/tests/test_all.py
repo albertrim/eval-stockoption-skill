@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from lib import comps, money, store, tax, threads, update, validate  # noqa: E402
+from lib import comps, dataset, money, predict, store, tax, threads, update, validate  # noqa: E402
 from lib.option_value import _add_months, vested_ratio  # noqa: E402
 
 
@@ -264,9 +264,28 @@ class TestThreadsConsistency(unittest.TestCase):
         self.assertNotIn("IT·소프트웨어", main)
 
     def test_six_month_loss_is_negative_in_replies(self):
-        rep = threads.replies(self._result())
-        joined = "\n".join(rep)
+        r = self._result()
+        r["option"]["scenarios"]["기준"]["after_tax_6m_krw"] = -1e7
+        joined = "\n".join(threads.replies(r))
         self.assertIn("-1,000만원", joined)
+
+    def test_six_month_line_degrades_without_spread(self):
+        # 분포가 없으면 "하위 25% —" 같은 빈칸 문장이 나가면 안 된다
+        joined = "\n".join(threads.replies(self._result()))
+        self.assertIn("[상장 6개월 뒤에 판다면]", joined)
+        self.assertNotIn("하위 25%", joined)
+        self.assertNotIn("—는 공모가", joined)
+
+    def test_six_month_line_shows_both_sides_when_spread_exists(self):
+        r = self._result()
+        r["option"]["ret_6m_spread"] = {"p25": -0.32, "median": -0.16, "p75": 0.15,
+                                        "n": 17, "positive_rate": 0.353}
+        r["option"]["scenarios"]["기준"]["after_tax_6m_low_krw"] = 1.5e7
+        r["option"]["scenarios"]["기준"]["after_tax_6m_high_krw"] = 3.0e7
+        joined = "\n".join(threads.replies(r))
+        self.assertIn("상위 25% 15.0%", joined)
+        self.assertIn("35%는 공모가를 넘겼습니다", joined)
+        self.assertIn("1,500만원 ~ 3,000만원", joined)
 
     def test_main_post_within_limit(self):
         self.assertLessEqual(len(threads.main_post(self._result())), threads.LIMIT)
@@ -278,10 +297,74 @@ class TestThreadsConsistency(unittest.TestCase):
         self.assertIn("· 세후 손에 쥐는 돈 2,000만원", main)
         self.assertNotIn("1,000만원 / 2,000만원", main)
 
+    def test_relaxation_depth_is_reported(self):
+        r = self._result()
+        r["valuation"]["relaxed"] = True
+        r["valuation"]["relaxed_steps"] = 4
+        joined = "\n".join(threads.replies(r))
+        self.assertIn("4단계 넓혔습니다", joined)
+        self.assertIn("이 업종의 배수라고 보기 어렵습니다", joined)
+
     def test_replies_keep_the_range(self):
         joined = "\n".join(threads.replies(self._result()))
         self.assertIn("[범위]", joined)
         self.assertIn("100억원~300억원", joined)
+
+
+class TestPredictRates(unittest.TestCase):
+    """흑자 여부가 확률에 실제로 반영되는지. 안 되면 두 회사가 같은 값을 받는다."""
+
+    def test_profit_and_loss_use_different_rates(self):
+        prof, basis_p = predict._rates(True)
+        loss, basis_l = predict._rates(False)
+        self.assertNotEqual(prof["approval_rate"], loss["approval_rate"])
+        self.assertGreater(prof["approval_rate"], loss["approval_rate"])
+        self.assertIn("흑자", basis_p)
+        self.assertIn("적자", basis_l)
+        # 표본이 얇으면 노이즈를 확률로 내보내게 된다
+        self.assertGreaterEqual(prof["n"], 100)
+        self.assertGreaterEqual(loss["n"], 100)
+
+    def test_profitable_company_gets_higher_probability(self):
+        kw = dict(sector_tag="it_saas", stage=3, stage_date=None, revenue=5e10,
+                  founded_year=2018, revenue_prev=4e10)
+        p = predict.estimate(profitable=True, **kw)["probability"]
+        l = predict.estimate(profitable=False, **kw)["probability"]
+        self.assertGreater(p, l)
+
+    def test_falls_back_when_by_profit_missing(self):
+        br = dataset.base_rates()
+        saved = br.get("by_profit")
+        try:
+            br["by_profit"] = {}
+            rates, basis = predict._rates(True)
+            self.assertEqual(basis, "코스닥 전체 최근 5년")
+            self.assertIsNotNone(rates["approval_rate"])
+        finally:
+            br["by_profit"] = saved
+
+
+class TestPreFilingHonesty(unittest.TestCase):
+    """근거 없는 계수를 곱한 값에 없는 정밀도를 붙이면 안 된다."""
+
+    KW = dict(sector_tag="industrial", revenue=7.5e10, profitable=False,
+              founded_year=2018, revenue_prev=6.7e10)
+
+    def test_pre_filing_probability_is_coarse(self):
+        for stage in (0, 1, 2):
+            r = predict.estimate(stage=stage, stage_date=None, **self.KW)
+            self.assertTrue(r["probability_is_estimate"])
+            # 5% 단위로 떨어져야 한다
+            self.assertAlmostEqual(r["probability"] * 20, round(r["probability"] * 20), places=6)
+
+    def test_filed_probability_keeps_precision(self):
+        r = predict.estimate(stage=3, stage_date="2026-07-15", **self.KW)
+        self.assertFalse(r["probability_is_estimate"])
+        self.assertNotAlmostEqual(r["probability"] * 20, round(r["probability"] * 20), places=6)
+
+    def test_pre_filing_reason_says_the_factor_is_unfounded(self):
+        r = predict.estimate(stage=1, stage_date=None, **self.KW)
+        self.assertTrue(any("근거 데이터가 없습니다" in x for x in r["reasons"]))
 
 
 class TestUpdateCheck(unittest.TestCase):

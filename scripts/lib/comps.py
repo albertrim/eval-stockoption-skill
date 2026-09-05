@@ -91,6 +91,7 @@ def select(sector_tag: str, revenue: float | None, profitable: bool,
         ladder.append((f"같은 업종·매출 {WIDE:.0f}배 이내·손익 같음",
                        [c for c in same_pnl if _band(c, revenue, WIDE)]))
     ladder.append(("같은 업종·손익 같음", same_pnl))
+    group_start = len(ladder)          # 여기서부터 업종군 단계
     if revenue:
         ladder.append((f"{group_label} 업종군·매출 {NEAR:.0f}배 이내·손익 같음",
                        [c for c in grp_pnl if _band(c, revenue, NEAR)]))
@@ -105,15 +106,25 @@ def select(sector_tag: str, revenue: float | None, profitable: bool,
     ladder.append(("업종 무관·손익 같음",
                    [c for c in pool if bool(c.get("profitable")) == profitable]))
 
+    # 같은 업종 상장사가 5곳도 안 되는 업종(ai_data 2곳, 이커머스 4곳)은 업종군이 출발선이다.
+    # 업종 단계는 애초에 채울 수 없으니 "넓힌 횟수"에 세지 않는다. 안 그러면 이런 업종은
+    # 언제나 "3단계 넓혀 믿기 어렵다"는 말을 듣는다.
+    n_sector_all = sum(1 for c in dataset.companies() if c.get("sector_tag") == sector_tag)
+    thin = n_sector_all < MIN_COMPS
+    base = group_start if thin else 0
+    sector_thin = {"n": n_sector_all, "group": group_label} if thin else None
+
+    def _pack(i: int, label: str, sub: list[dict]) -> dict:
+        steps = max(0, i - base)
+        return {"comps": sub, "criteria": label, "relaxed": steps > 0,
+                "relaxed_steps": steps, "metric": metric, "pool_size": len(pool),
+                "scope": _scope(sub, sector_tag, group_label), "sector_thin": sector_thin}
+
     for i, (label, sub) in enumerate(ladder):
         if len(sub) >= MIN_COMPS:
-            return {"comps": sub, "criteria": label, "relaxed": i > 0,
-                    "relaxed_steps": i, "metric": metric, "pool_size": len(pool),
-                    "scope": _scope(sub, sector_tag, group_label)}
+            return _pack(i, label, sub)
     label, sub = max(ladder, key=lambda x: len(x[1]))
-    return {"comps": sub, "criteria": label + " (표본 부족)", "relaxed": True,
-            "relaxed_steps": len(ladder), "metric": metric, "pool_size": len(pool),
-            "scope": _scope(sub, sector_tag, group_label)}
+    return _pack(len(ladder), label + " (표본 부족)", sub)
 
 
 def _scope(sub: list[dict], sector_tag: str, group_label: str) -> str:

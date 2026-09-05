@@ -100,7 +100,8 @@ def evaluate(*, quantity: int, strike_krw: float, grant_date: str,
         # 상장 직후에 못 팔거나 안 팔았을 때 — 소득세는 공모가 기준으로 이미 확정된다.
         # 6개월 뒤 수익률은 한쪽으로 쏠려 있지 않아 하위 25%~상위 25%를 함께 낸다.
         def _after6(ret: float | None, *, price=price, qty6=qty6) -> float | None:
-            if ret is None or qty6 == 0:
+            # 공모가 기준 주당가가 행사가 아래면 애초에 행사하지 않는다. 그 경우 6개월 값도 없다.
+            if ret is None or qty6 == 0 or price <= strike_krw:
                 return None
             g6 = max(0.0, price - strike_krw) * qty6
             t6 = tax.exercise_tax(g6, salary_krw or 0.0, venture=is_venture)

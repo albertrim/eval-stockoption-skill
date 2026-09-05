@@ -19,10 +19,33 @@ def ensure() -> None:
     DATA.mkdir(parents=True, exist_ok=True)
 
 
+def _data_version(p: Path) -> str:
+    try:
+        return str(json.loads(p.read_text(encoding="utf-8")).get("data_version") or "")
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return ""
+
+
+def downloaded_is_current() -> bool:
+    """내려받은 데이터가 동봉 데이터보다 오래되지 않았는지.
+
+    플러그인 업데이트는 새 코드와 새 동봉 데이터를 같이 가져온다. 그 뒤에도 예전에 내려받은
+    사본이 남아 있으면 새 코드가 옛 데이터를 읽는다. 기준일이 더 새로운 쪽을 쓴다.
+    """
+    d, b = DATA / "manifest.json", BUNDLED / "manifest.json"
+    if not d.exists():
+        return False
+    if not b.exists():
+        return True
+    return _data_version(d) >= _data_version(b)
+
+
 def data_file(name: str) -> Path:
-    """내려받은 사본을 먼저, 없으면 스킬에 동봉된 사본을 쓴다."""
+    """내려받은 사본과 동봉 사본 중 기준일이 새로운 쪽. 같으면 내려받은 쪽."""
     p = DATA / name
-    return p if p.exists() else BUNDLED / name
+    if p.exists() and downloaded_is_current():
+        return p
+    return BUNDLED / name
 
 
 def load_data(name: str) -> dict:

@@ -6,6 +6,14 @@ import datetime as dt
 SECTORS = {"it_saas", "ai_data", "bio_health", "beauty", "ecommerce_platform",
            "fintech", "content_game", "hardware_semi", "industrial", "other"}
 THIS_YEAR = dt.date.today().year
+# 억 → 원 변환은 LLM이 한다. 1억원 미만 매출·밸류는 변환을 빼먹은 것이지 진짜 값이 아니다.
+UNIT_FLOOR = 100_000_000
+MIN_SHARES = 1_000
+
+
+def _unit_hint(label: str, v: float) -> str:
+    return (f"{label} {v:,.0f}원은 1억원 미만입니다. 억 단위를 원으로 바꿨는지 확인하세요 "
+            "(85억 → 8500000000).")
 
 
 def _date(v, label: str, errs: list[str]) -> dt.date | None:
@@ -31,6 +39,8 @@ def validate_company(p: dict) -> list[str]:
         v = p.get(key)
         if v is not None and v < 0:
             e.append(f"{label}은(는) 음수일 수 없습니다: {v}")
+        elif v is not None and 0 < v < UNIT_FLOOR:
+            e.append(_unit_hint(label, v) + " 매출이 정말 없으면 0을 넣으세요.")
     if p.get("revenue_krw") is None:
         e.append("최근 연매출이 필요합니다. 매출이 없으면 0을 넣으세요.")
     stage = p.get("stage")
@@ -46,9 +56,14 @@ def validate_company(p: dict) -> list[str]:
     shares = p.get("shares_outstanding")
     if shares is not None and shares <= 0:
         e.append(f"발행주식수는 0보다 커야 합니다: {shares}")
+    elif shares is not None and shares < MIN_SHARES:
+        e.append(f"발행주식수 {shares:,}주는 너무 적습니다. 단위(주)를 확인하세요.")
     lr = p.get("last_round") or {}
     if not shares and not (lr.get("post_money_krw") and lr.get("price_per_share_krw")):
         e.append("발행주식수, 또는 최근 투자 라운드의 밸류에이션과 주당 가격 중 하나가 필요합니다.")
+    pm = lr.get("post_money_krw")
+    if pm is not None and 0 < pm < UNIT_FLOOR:
+        e.append(_unit_hint("최근 라운드 밸류에이션", pm))
     if lr.get("price_per_share_krw") is not None and lr["price_per_share_krw"] <= 0:
         e.append("최근 라운드 주당 가격은 0보다 커야 합니다.")
     return e

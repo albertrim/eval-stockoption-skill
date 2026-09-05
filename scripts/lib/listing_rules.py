@@ -55,3 +55,15 @@ def check(market_cap_krw: float | None, revenue_krw: float | None, profitable: b
             )
     notes.append("자기자본·기준시가총액 요건은 입력받지 않아 확인하지 않았습니다.")
     return {"verdict": "가능성 있음", "floor_krw": floor, "notes": notes}
+
+
+def apply(pred: dict, gate: dict) -> None:
+    """형식요건 판정을 상장 가능성에 반영한다. '못 미친다'와 '모른다'는 다르게 다룬다."""
+    if gate["verdict"] == "미달":
+        # 형식요건에 못 닿는 규모다. 청구 이력 기반 확률을 그대로 쓰면 사용자를 오도한다.
+        pred["probability"] = round(min(pred["probability"], 0.05), 3)
+        pred["probability_is_estimate"] = True
+        pred["reasons"].insert(0, gate["notes"][0])
+    elif gate["verdict"] == "규모 미확인":
+        # 시총을 못 냈을 뿐 작다는 뜻이 아니다. 단계 기반 확률은 그대로 두고 이유만 남긴다.
+        pred["reasons"].append(gate["notes"][0])

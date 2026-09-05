@@ -159,13 +159,16 @@ def _scale_at(txt: str, pos: int) -> int:
     return UNIT[ms[-1]] if ms else 1
 
 
+WINDOW = 40   # 라벨 뒤 이만큼의 줄 안에서만 숫자를 찾는다. 넘어가면 다른 표다.
+
+
 def _after(txt: str, label: str, count: int = 2) -> tuple[list[float], int]:
     """표에서 라벨 바로 뒤에 오는 숫자들. 주석번호(2자리 이하)는 건너뛴다."""
     m = re.search(re.escape(label) + r"\s*\n((?:.*\n){0,3}?)", txt)
     if not m:
         return [], -1
     out = []
-    for line in txt[m.end():].split("\n"):
+    for line in txt[m.end():].split("\n", WINDOW)[:WINDOW]:
         v = _num(line)
         if v is None:
             if len(out) >= count or re.search(r"[가-힣]", line) and out:
@@ -192,6 +195,12 @@ def _roman(*words: str) -> tuple[str, ...]:
 REV_LABELS = _roman("매출액", "영업수익")
 OP_LABELS = _roman("영업이익(손실)", "영업이익")
 LOSS_LABELS = _roman("영업손실")
+# 사업보고서 요약재무정보는 로마숫자 없이 '매출액', '영업손익'으로만 적는 회사가 많다(컬리 등).
+# 요약재무정보 표 안에서만 맨몸 라벨을 허용한다. 문서 전체에서 허용하면 주석 표를 물어온다.
+BARE_REV_LABELS = ("매출액", "영업수익")
+BARE_OP_LABELS = ("영업이익(손실)", "영업손익", "영업이익")
+BARE_LOSS_LABELS = ("영업손실",)
+SUMMARY_SPAN = 20_000
 
 
 def _pick(seg: str, labels, count: int = 2) -> tuple[list[float], int]:
@@ -204,7 +213,9 @@ def _pick(seg: str, labels, count: int = 2) -> tuple[list[float], int]:
     return [], -1
 
 
-HEAD_RE = re.compile(r"요약(연결|별도)?재무정보")
+# "요약연결재무정보"도 "요약 연결 재무정보"도 있다(컬리). 띄어쓰기를 무시하지 않으면 연결 표를
+# 별도라고 적는다.
+HEAD_RE = re.compile(r"요약\s*(연결|별도)?\s*재무정보")
 
 
 def _basis_at(seg: str, pos: int) -> str | None:
@@ -229,14 +240,27 @@ def _income(txt: str) -> dict:
     seg = txt[i:] if i >= 0 else txt
     rev, pos = _pick(seg, REV_LABELS)
     op, _ = _pick(seg, OP_LABELS)
-    sign = 1
+    loss = False
     if not op:
         op, _ = _pick(seg, LOSS_LABELS)
-        sign = -1
+        loss = bool(op)
+    if i >= 0:
+        summary = seg[:SUMMARY_SPAN]
+        if not rev:
+            rev, pos = _pick(summary, BARE_REV_LABELS)
+        if not op:
+            op, _ = _pick(summary, BARE_OP_LABELS)
+            if not op:
+                op, _ = _pick(summary, BARE_LOSS_LABELS)
+                loss = bool(op)
+    # '영업손실' 라벨이면 값이 양수로 적혀 있어도 손실이다. 그 밖의 라벨은 괄호 음수를 믿는다.
+    operating_income = None
+    if op:
+        operating_income = -abs(op[0]) if loss else op[0]
     return {"basis": _basis_at(seg, pos) if rev else None,
             "revenue": rev[0] if rev else None,
             "revenue_prev": rev[1] if len(rev) > 1 else None,
-            "operating_income": sign * abs(op[0]) if op else None}
+            "operating_income": operating_income}
 
 
 def _shares(txt: str) -> dict:
@@ -247,8 +271,9 @@ def _shares(txt: str) -> dict:
     """
     # 사업보고서는 '주식의 총수 현황' 표가 우선주까지 합산해 준다. 합계는 각 열보다
     # 크거나 같으므로 최댓값을 고르면 열 순서를 몰라도 맞는다.
-    m = re.search(r"발행주식의 총수[^\n]*\n((?:[^\n]*\n){0,4})", txt)
-    if m:
+    # 같은 문구가 본문 문장("발행주식의 총수는 보통주식 N주 입니다")에 먼저 나오기도 한다.
+    # 숫자가 따라오는 첫 번째 것, 즉 표를 쓴다.
+    for m in re.finditer(r"발행주식의 총수[^\n]*\n((?:[^\n]*\n){0,4})", txt):
         vals = [v for v in (_num(x) for x in m.group(1).split("\n")) if v]
         if vals:
             n = int(max(vals))

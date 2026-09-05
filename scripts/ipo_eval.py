@@ -71,12 +71,8 @@ def cmd_company(args) -> None:
         revenue_prev=prof.get("revenue_prev_krw"))
     gate = listing_rules.check(val["market_cap_krw"].get("기준"), prof.get("revenue_krw"), profitable)
     if val.get("scale_warning"):
-        gate = {"verdict": "규모 미달", "notes": [val["scale_warning"]]}
-    if gate["verdict"] in {"미달", "규모 미달"}:
-        # 형식요건에 못 닿는 규모다. 청구 이력 기반 확률을 그대로 쓰면 사용자를 오도한다.
-        pred["probability"] = round(min(pred["probability"], 0.05), 3)
-        pred["probability_is_estimate"] = True
-        pred["reasons"].insert(0, gate["notes"][0])
+        gate = {"verdict": "규모 미확인", "notes": [val["scale_warning"]]}
+    listing_rules.apply(pred, gate)
     result = {
         "company": {k: prof.get(k) for k in
                     ("name", "sector_tag", "founded_year", "revenue_krw", "revenue_prev_krw",

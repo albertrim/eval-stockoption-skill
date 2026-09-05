@@ -109,22 +109,33 @@ def estimate(*, sector_tag: str, revenue: float | None, net_income: float | None
 
     basis_note = None
     scale_warning = None
+    per_basis_note = None
+    if metric == "per":
+        # 순이익은 사용자가 알기 어렵고 해마다 크게 흔들려 영업이익에 곱한다. 정확도를 일부
+        # 포기한 결정이라 그 사실을 결과에 적는다 (methodology.md §2).
+        per_basis_note = ("PER은 영업이익에 곱했습니다. 비교기업 PER은 순이익 기준이라 "
+                          "시총이 대체로 그만큼 높게 나옵니다.")
     if metric == "abs":
-        basis_note = ("매출이 30억원에 못 미쳐 회사 실적 대신 같은 업종 상장사의 "
-                      "공모시총 분포를 그대로 씁니다. 이 시총에는 우리 회사 숫자가 "
-                      "들어가지 않았습니다.")
         scale_warning = _scale_check(sector_tag, founded_year, revenue, last_round_krw,
                                      caps.get("기준"))
         if scale_warning:
+            # 시총을 내지 않았다. "분포를 그대로 썼다"는 문장도 함께 빠져야 한다.
             for k in SCEN:
                 caps[k] = None
+        else:
+            basis_note = ("매출이 30억원에 못 미쳐 회사 실적 대신 같은 업종 상장사의 "
+                          "공모시총 분포를 그대로 씁니다. 이 시총에는 우리 회사 숫자가 "
+                          "들어가지 않았습니다.")
 
     ratio, ratio_is_default = _median_new_share_ratio(pool)
     shares_at_ipo = int(round(shares_outstanding * (1 + ratio))) if shares_outstanding else None
     per_share = {k: (v / shares_at_ipo if v and shares_at_ipo else None) for k, v in caps.items()}
 
-    split = _split_hint(per_share.get("기준")) or _split_hint(per_share.get("낙관"))
+    # 메인 글에 찍히는 값은 기준 주당가다. 낙관 주당가로 만든 분할 배수를 그 밑에 붙이면
+    # 읽는 사람이 기준 주당가를 나눠 본다.
+    split = _split_hint(per_share.get("기준"))
     ret6 = comps_mod.median_of(pool, "ret_6m")
+    ret6_n = sum(1 for c in pool if c.get("ret_6m") is not None)
     ret6_spread = comps_mod.spread_of(pool, "ret_6m")
     cap6 = {k: (v * (1 + ret6) if v and ret6 is not None else None) for k, v in caps.items()}
 
@@ -146,16 +157,21 @@ def estimate(*, sector_tag: str, revenue: float | None, net_income: float | None
 
     return {
         "metric": metric, "metric_label": METRIC_LABEL[metric], "metric_note": metric_note,
+        "per_basis_note": per_basis_note,
         "multiples": {k: q[QKEY[k]] for k in SCEN}, "quartiles": q,
         "criteria": sel["criteria"], "relaxed": sel["relaxed"], "relaxed_steps": sel["relaxed_steps"],
+        "sector_thin": sel.get("sector_thin"),
         "comps_scope": sel["scope"],
         "comps_n": len(pool),
+        # 업종을 함께 준다. 이름만 주면 LLM이 기억으로 회사를 짐작하거나, 자동차부품 회사를
+        # 물류 회사의 비교기업이라고 그냥 읽어 넘긴다.
         "comps": [{"name": c["name"], "code": c["code"], "listing_date": c["listing_date"],
+                   "industry": c.get("industry_naver"), "industry_detail": c.get("industry_38"),
                    "revenue_krw": c.get("revenue_krw"), "value": c[comps_mod.FIELD[metric]],
                    "ret_6m": c.get("ret_6m")} for c in sorted(pool, key=lambda c: c["listing_date"], reverse=True)],
         "market_cap_krw": caps,
         "market_cap_6m_krw": cap6,
-        "median_ret_6m": ret6, "ret_6m_spread": ret6_spread,
+        "median_ret_6m": ret6, "ret_6m_n": ret6_n, "ret_6m_spread": ret6_spread,
         "fan_collapsed": _fan_collapsed(caps),
         "basis_note": basis_note,
         "scale_warning": scale_warning,

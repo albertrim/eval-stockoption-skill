@@ -14,8 +14,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from lib import comps, dataset, money, predict, store, tax, threads, update, validate  # noqa: E402
-from lib.option_value import _add_months, vested_ratio  # noqa: E402
+from lib import comps, dart, dataset, listing_rules, money, predict, store, tax, threads, update, validate, valuate  # noqa: E402
+from lib.option_value import _add_months, evaluate, vested_ratio  # noqa: E402
 
 
 class TestMoney(unittest.TestCase):
@@ -87,6 +87,17 @@ class TestValidate(unittest.TestCase):
         p = dict(self.BASE); p.pop("shares_outstanding")
         self.assertTrue(any("발행주식수" in e for e in validate.validate_company(p)))
 
+    def test_unit_mistake_caught(self):
+        # "85억"을 8500으로 넣은 것. 억→원 변환은 LLM이 하므로 여기서 막아야 한다
+        p = dict(self.BASE, revenue_krw=8_500)
+        self.assertTrue(any("억 단위" in e for e in validate.validate_company(p)))
+        p = dict(self.BASE, shares_outstanding=12)
+        self.assertTrue(any("단위(주)" in e for e in validate.validate_company(p)))
+        p = dict(self.BASE, last_round={"post_money_krw": 400, "price_per_share_krw": 8000})
+        self.assertTrue(any("억 단위" in e for e in validate.validate_company(p)))
+        # 0은 "매출 없음"이라 통과한다
+        self.assertEqual(validate.validate_company(dict(self.BASE, revenue_krw=0)), [])
+
     OPT = {"quantity": 5000, "strike_krw": 3000, "grant_date": "2023-03-15",
            "expiry_date": "2030-03-14",
            "vest_schedule": [{"after_months": 24, "cumulative_pct": 1.0}]}
@@ -154,6 +165,40 @@ class TestComps(unittest.TestCase):
     def test_group_covers_small_sectors(self):
         self.assertIn("ecommerce_platform", comps.group_peers("beauty"))
         self.assertIn("it_saas", comps.group_peers("ai_data"))
+
+    def test_thin_sector_starts_from_group_rung(self):
+        # ai_data는 2곳뿐이라 업종군이 출발선이다. "3단계 넓혔다"가 나오면 안 된다
+        sel = comps.select("ai_data", 1.5e10, False, "psr")
+        self.assertTrue(sel["sector_thin"])
+        self.assertLess(sel["sector_thin"]["n"], comps.MIN_COMPS)
+        self.assertEqual(sel["relaxed_steps"], 0)
+        self.assertFalse(sel["relaxed"])
+        # 표본이 넉넉한 업종은 원래대로 0단계부터 센다
+        sel = comps.select("it_saas", 3e10, True, "per")
+        self.assertIsNone(sel["sector_thin"])
+        self.assertEqual(sel["relaxed_steps"], 0)
+
+    def test_comps_carry_industry(self):
+        val = valuate.estimate(sector_tag="industrial", revenue=7.5e10, net_income=-8e9,
+                               operating_income=-8e9, profitable=False, shares_outstanding=12_000_000)
+        self.assertTrue(all("industry" in c for c in val["comps"]))
+        self.assertTrue(any(c["industry"] for c in val["comps"]))
+
+    def test_split_hint_follows_the_mid_price_only(self):
+        # 기준 주당가가 공모가 범위 안이면 낙관이 범위 밖이어도 힌트를 붙이지 않는다
+        val = valuate.estimate(sector_tag="it_saas", revenue=1e11, net_income=1e9,
+                               operating_income=1e9, profitable=True, shares_outstanding=8_000_000)
+        mid = val["price_per_share"]["기준"]
+        if val["split_hint"]:
+            self.assertFalse(valuate.PRICE_LOW <= mid <= valuate.PRICE_HIGH)
+        else:
+            self.assertTrue(valuate.PRICE_LOW <= mid <= valuate.PRICE_HIGH)
+
+    def test_per_path_says_it_uses_operating_income(self):
+        val = valuate.estimate(sector_tag="hardware_semi", revenue=8e10, net_income=9e9,
+                               operating_income=9e9, profitable=True, shares_outstanding=5_000_000)
+        self.assertEqual(val["metric"], "per")
+        self.assertIn("영업이익", val["per_basis_note"])
 
 
 class TestMoneySigned(unittest.TestCase):
@@ -310,6 +355,165 @@ class TestThreadsConsistency(unittest.TestCase):
         self.assertIn("[범위]", joined)
         self.assertIn("100억원~300억원", joined)
 
+    def test_replies_are_five_and_each_within_limit(self):
+        r = self._result()
+        reps = threads.replies(r)
+        self.assertEqual(len(reps), 5)
+        rendered = threads.render(r)
+        self.assertEqual(rendered["replies_over_limit"], [])
+        self.assertEqual(len(rendered["reply_lengths"]), 5)
+        # 회사만 계산했으면 옵션 답글이 빠져 4개
+        r.pop("option")
+        self.assertEqual(len(threads.replies(r)), 4)
+
+    def test_six_month_median_is_attributed_to_comps(self):
+        r = self._result()
+        r["valuation"]["median_ret_6m"] = -0.1
+        joined = "\n".join(threads.replies(r))
+        self.assertIn("비교기업 5곳의 공모가 대비 6개월 뒤", joined)
+        self.assertNotIn("최근 상장사는 공모가 대비", joined)
+
+    def test_comps_show_industry_and_per_basis(self):
+        r = self._result()
+        r["valuation"]["comps"] = [{"name": "A", "industry": "자동차부품"}]
+        r["valuation"]["metric"] = "per"
+        r["valuation"]["per_basis_note"] = "PER은 영업이익에 곱했습니다."
+        joined = "\n".join(threads.replies(r))
+        self.assertIn("A(자동차부품)", joined)
+        self.assertIn("PER(영업이익 기준)", joined)
+        self.assertIn("PER은 영업이익에 곱했습니다.", joined)
+
+    def test_thin_sector_is_explained_not_blamed(self):
+        r = self._result()
+        r["valuation"]["sector_thin"] = {"n": 2, "group": "IT·하드웨어"}
+        r["valuation"]["relaxed"] = False
+        r["valuation"]["relaxed_steps"] = 0
+        joined = "\n".join(threads.replies(r))
+        self.assertIn("2곳뿐이라 IT·하드웨어 업종군에서 골랐습니다", joined)
+        self.assertNotIn("보기 어렵습니다", joined)
+
+    def test_scale_unknown_is_not_called_a_listing_requirement(self):
+        r = self._result()
+        r["listing_gate"] = {"verdict": "규모 미확인", "notes": ["규모를 가늠할 근거가 없습니다."]}
+        joined = "\n".join(threads.replies(r))
+        self.assertIn("[규모 미확인] 규모를 가늠할 근거가 없습니다.", joined)
+        self.assertNotIn("[상장요건]", joined)
+
+
+class TestGate(unittest.TestCase):
+    """'못 미친다'와 '모른다'를 같은 5%로 만들면 안 된다."""
+
+    def _pred(self):
+        return {"probability": 0.35, "probability_is_estimate": True, "reasons": ["a"]}
+
+    def test_below_floor_caps_probability(self):
+        pred = self._pred()
+        listing_rules.apply(pred, {"verdict": "미달", "notes": ["작다"]})
+        self.assertEqual(pred["probability"], 0.05)
+        self.assertEqual(pred["reasons"][0], "작다")
+
+    def test_unknown_scale_keeps_probability(self):
+        pred = self._pred()
+        listing_rules.apply(pred, {"verdict": "규모 미확인", "notes": ["모른다"]})
+        self.assertEqual(pred["probability"], 0.35)
+        self.assertIn("모른다", pred["reasons"])
+
+
+class TestOptionSixMonths(unittest.TestCase):
+    """행사하지 않은 옵션이 6개월 뒤에 손실이 날 수는 없다."""
+
+    def _company(self, prices):
+        return {"prediction": {"expected_ipo_date": "2027-06", "track": "일반"},
+                "valuation": {"price_per_share": prices, "shares_at_ipo": 6_000_000,
+                              "median_ret_6m": -0.2,
+                              "ret_6m_spread": {"p25": -0.4, "median": -0.2, "p75": 0.3,
+                                                "n": 20, "positive_rate": 0.4}}}
+
+    def test_out_of_the_money_has_no_six_month_value(self):
+        r = evaluate(quantity=1000, strike_krw=40_000, grant_date="2023-01-01",
+                     vest_schedule=[{"after_months": 24, "cumulative_pct": 1.0}],
+                     expiry_date="2031-01-01", salary_krw=None,
+                     company_result=self._company({"보수": 10_000, "기준": 20_000, "낙관": 30_000}))
+        for s in r["scenarios"].values():
+            self.assertEqual(s["after_tax_krw"], 0.0)
+            self.assertIsNone(s["after_tax_6m_krw"])
+            self.assertIsNone(s["after_tax_6m_low_krw"])
+
+    def test_in_the_money_keeps_six_month_value(self):
+        r = evaluate(quantity=1000, strike_krw=5_000, grant_date="2023-01-01",
+                     vest_schedule=[{"after_months": 24, "cumulative_pct": 1.0}],
+                     expiry_date="2031-01-01", salary_krw=None,
+                     company_result=self._company({"보수": 10_000, "기준": 20_000, "낙관": 30_000}))
+        self.assertIsNotNone(r["scenarios"]["기준"]["after_tax_6m_krw"])
+        self.assertGreater(r["scenarios"]["기준"]["after_tax_krw"], 0)
+
+
+class TestDartParsing(unittest.TestCase):
+    """사업보고서 요약재무정보는 로마숫자 없이 적는 회사가 많다(컬리)."""
+
+    DOC = ("1. 요약재무정보\n가. 요약연결재무정보\n(단위: 원)\n구 분\n제12기\n제11기\n"
+           "매출액\n2,367,115,187,275\n2,195,645,501,699\n2,077,354,737,526\n"
+           "영업손익\n13,100,524,714\n(18,329,152,144)\n(143,640,061,103)\n"
+           "주당순이익\n(367)\n(964)\n")
+
+    def test_bare_labels_in_summary_table(self):
+        fin = dart._income(self.DOC)
+        self.assertEqual(fin["revenue"], 2_367_115_187_275)
+        self.assertEqual(fin["revenue_prev"], 2_195_645_501_699)
+        self.assertEqual(fin["operating_income"], 13_100_524_714)
+
+    def test_spaced_heading_still_marks_consolidated(self):
+        # "1. 요약재무정보" 제목 다음에 "가. 요약 연결 재무정보"가 오면 그 표는 연결이다
+        doc = self.DOC.replace("가. 요약연결재무정보", "가. 요약 연결 재무정보")
+        self.assertEqual(dart._income(doc)["basis"], "연결")
+        self.assertEqual(dart._income(self.DOC)["basis"], "연결")
+
+    def test_parenthesised_loss_keeps_its_sign(self):
+        doc = self.DOC.replace("13,100,524,714", "(13,100,524,714)")
+        self.assertEqual(dart._income(doc)["operating_income"], -13_100_524_714)
+
+    def test_bare_labels_need_summary_heading(self):
+        # 요약재무정보 표가 없으면 맨몸 라벨은 쓰지 않는다. 주석 표를 물어올 수 있다
+        self.assertIsNone(dart._income(self.DOC.replace("요약재무정보", "재무"))["revenue"])
+
+    def test_shares_table_beats_sentence(self):
+        doc = ("당사가 발행할 주식의 총수는 500,000,000주이며, 발행주식의 총수는 보통주식 42,344,572주 입니다.\n"
+               "(기준일 :\n2025년 12월 31일\n)\n(단위 : 주, %)\n구 분\n"
+               "Ⅳ. 발행주식의 총수 (Ⅱ-Ⅲ)\n42,344,572\n-\n-\n42,344,572\n-\n")
+        self.assertEqual(dart._shares(doc)["diluted"], 42_344_572)
+
+
+class TestStoreDataChoice(unittest.TestCase):
+    """플러그인 업데이트로 동봉 데이터가 새것이면 옛 내려받은 사본이 이기면 안 된다."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self._home, self._data = store.HOME, store.DATA
+        store.HOME = Path(self.tmp); store.DATA = store.HOME / "data"; store.DATA.mkdir(parents=True)
+        self.bundled_version = json.loads((store.BUNDLED / "manifest.json").read_text())["data_version"]
+
+    def tearDown(self):
+        store.HOME, store.DATA = self._home, self._data
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _download(self, version: str):
+        (store.DATA / "manifest.json").write_text(json.dumps({"data_version": version}))
+        (store.DATA / "base_rates.json").write_text("{}")
+
+    def test_older_download_is_ignored(self):
+        self._download("2000-01-01")
+        self.assertEqual(store.data_file("base_rates.json"), store.BUNDLED / "base_rates.json")
+
+    def test_newer_download_wins(self):
+        self._download("2999-01-01")
+        self.assertEqual(store.data_file("base_rates.json"), store.DATA / "base_rates.json")
+        # 내려받다 만 파일은 동봉본으로
+        self.assertEqual(store.data_file("kosdaq_ipo.json"), store.BUNDLED / "kosdaq_ipo.json")
+
+    def test_same_version_prefers_download(self):
+        self._download(self.bundled_version)
+        self.assertEqual(store.data_file("base_rates.json"), store.DATA / "base_rates.json")
+
 
 class TestPredictRates(unittest.TestCase):
     """흑자 여부가 확률에 실제로 반영되는지. 안 되면 두 회사가 같은 값을 받는다."""
@@ -406,6 +610,30 @@ class TestUpdateCheck(unittest.TestCase):
         self.assertFalse(after["data"]["changed"])
         self.assertTrue(after["skill"]["changed"])
         self.assertTrue(after["update_available"])
+
+    def test_local_ahead_of_remote_is_not_an_update(self):
+        # 아직 push 안 한 0.7.0 개발 폴더에서 원격 0.6.0을 "새 버전"이라고 하면 안 된다
+        self.assertFalse(update._newer("0.6.0", "0.7.0"))
+        self.assertTrue(update._newer("0.10.0", "0.9.0"))
+        self.assertFalse(update._newer("2026-09-05", "2026-09-05"))
+        self.assertTrue(update._newer("2026-10-01", "2026-09-05"))
+        self.assertTrue(update._newer("0.1.0", None))
+
+    def test_plugin_cache_is_never_git_pulled(self):
+        # 플러그인은 ~/.claude/plugins/cache/<마켓>/<플러그인>/<버전>/ 에 복사본으로 들어온다.
+        # 여기서 git pull을 시도하거나 "폴더를 덮어써라"고 하면 안 된다.
+        saved = update.SKILL_ROOT
+        try:
+            update.SKILL_ROOT = Path(self.tmp) / ".claude" / "plugins" / "cache" / "ipo-eval" / "ipo-eval" / "0.7.0"
+            update.SKILL_ROOT.mkdir(parents=True)
+            self.assertEqual(update.install_method(), "plugin")
+            res = update.apply(skill=True)
+            self.assertEqual(res["skill"]["method"], "plugin")
+            self.assertIn("/plugin update ipo-eval", res["skill"]["message"])
+            self.assertNotIn("덮어써", res["skill"]["message"])
+            self.assertEqual(update.check(force=True)["skill"]["how"], "/plugin update ipo-eval")
+        finally:
+            update.SKILL_ROOT = saved
 
 
 if __name__ == "__main__":
